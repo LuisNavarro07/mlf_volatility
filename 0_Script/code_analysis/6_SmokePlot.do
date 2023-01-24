@@ -11,7 +11,7 @@ graph drop _all
 global smokeopts lcolor(gray*0.8) lwidth(vthin) lpattern(solid)
 global title title(,pos(11) size(3) color(black))
 global back plotregion(color()) graphregion(color() margin(4 4 4 4)) plotregion(lcolor(black)) 
-global graph_options ytitle(, size(small)) ylabel(#8, nogrid labsize(vsmall) angle(0)) xtitle(, size(vsmall)) xlabel(#16, labsize(vsmall) angle(90) nogrid) title(, size(small) pos(11) color(black)) xsca(titlegap(*-.5)) ysca(titlegap(*-3)) plotregion(lcolor()) xtitle("") ytitle("") $back legend(on order(1 "CI (SmokeArea)" 2 "Treatment Effect") rows(1) size(small))
+global graph_options ytitle(, size(small)) ylabel(#10, nogrid labsize(vsmall) angle(0)) xtitle(, size(vsmall)) xlabel(#15, labsize(vsmall) angle(0) nogrid) title(, size(small) pos(11) color(black)) xsca(titlegap(*-.5)) ysca(titlegap(*-3)) plotregion(lcolor()) xtitle("") ytitle("") $back legend(off order(1 "CI (SmokeArea)" 2 "Treatment Effect") rows(1) size(small))
 
 
 ///Crosswalks for months 
@@ -45,24 +45,34 @@ keep if month_exp < ${tr_eff_window}
 
 /// For Each Treated Unit 
 forvalues j=1(1)$rows {
+
+/// Store Labels From Results -- Fix Code 
 preserve 	
 use "${tem}\ATE_Results_Full.dta", clear
-forvalues s=1(1)8{
-replace b`j' = subinstr(b`j', "/", "",.)
-}
-local ate = b`j'[1]
-local pval = b`j'[6]
-local baseline = b`j'[4]
-local pct = b`j'[5]
-local rmspe = b`j'[8]
+order Results A AA AAA BBB 
+rename (A AA AAA BBB) (b1 b2 b3 b4)
+keep Results b`j'
+keep if Results == "ATE" | Results == "\% Change" | Results == "RMSPE"
+qui replace b`j' = subinstr(b`j',"***","",1)
+qui replace b`j' = subinstr(b`j',"**","",1)
+qui replace b`j' = subinstr(b`j',"*","",1)
+qui replace b`j' = subinstr(b`j',"\%","",1)
+qui destring b`j', replace  
+local ate =     b`j'[1]
+local pchange = b`j'[2]
+local rmspe =   b`j'[3]
+dis `ate'
+dis `pchange'
+dis `rmspe'
 restore 
+
+
 
 preserve
 qui keep if fileid == `j'
 sort id month_exp
 /// Save Treatment Effects and Statistics 
 matlist M 
-
 /// Create Percentile Variables 
 gen p1 = . 
 gen p2 = . 
@@ -84,20 +94,21 @@ forvalues t= -15(1)20 {
 /// Keep treated and do the graph 
 keep if treat == 1
 merge 1:1 month_exp using `dates', keep(match master) nogen
-qui sum mofd if month_exp == 0 
+qui sum month_exp if month_exp == 0 
 local xline = r(mean)
 
-twoway (rarea p1 p99 mofd,     fc(gs13%40) lc(gs15%40) lw(medthick)) ///
-		(rarea p2 p97 mofd, fc(gs10%40) lc(gs12%40) lw(medthick)) ///	
-		(rarea p5 p95 mofd,      fc(gs7%40)  lc(gs9%40) lw(medthick))	///
-		(line tr_eff mofd, sort lcolor(maroon) lpattern(solid)), ///
-		xline(`xline' , lcolor(black) lpattern(dash) lwidth(thin)) yline(0 , lcolor(black) lpattern(dash) lwidth(thin)) $graph_options name(gr`j', replace) title("`title`j''", size(small) pos(11)) legend(order(- 1 5) note("ATE = `ate'" "p-value = `pval'" "RMSPE = `rmspe'" "% Change = `pct'",pos(11) size(vsmall)) label(1 "90/95/99 C.I.") pos(11) ring(0) cols(1) size(tiny) region(lstyle(none) fcolor(none)))
+twoway (rarea p1 p99 month_exp,     fc(gs13%40) lc(gs15%40) lw(medthick)) ///
+		(rarea p2 p97 month_exp, fc(gs10%40) lc(gs12%40) lw(medthick)) ///	
+		(rarea p5 p95 month_exp,      fc(gs7%40)  lc(gs9%40) lw(medthick))	///
+		(line tr_eff month_exp, sort lcolor(maroon) lpattern(solid)), ///
+		xline(`xline' , lcolor(black) lpattern(dash) lwidth(thin)) yline(0 , lcolor(black) lpattern(dash) lwidth(thin)) $graph_options name(gr`j', replace) title("`title`j''", size(small) pos(11)) xtitle("Months since MLF Implementation") 
+*legend(on order(- 1 5) note("ATE = `ate'" "RMSPE = `rmspe'" "% Change = `pchange'",pos(11) size(vsmall)) label(1 "90/95/99 C.I.") pos(11) ring(0) cols(1) size(tiny) region(lstyle(none) fcolor(none)))
 *graph export "${oup}\smoke_`title`j''.png", $export 
 restore 
 }
 
-graph combine gr3 gr2 gr1 gr4, name(grcomb1,replace) $combopts 
-graph export "${oup}\SmokeCombinedOut_${tr_eff_window}.pdf", replace
+graph combine gr3 gr2 gr1 gr4, name(grcomb1,replace) xcommon  
+graph export "${oup}\Figure3_SmokeplotCombined.pdf", replace
 
 
 ********************************************************************************

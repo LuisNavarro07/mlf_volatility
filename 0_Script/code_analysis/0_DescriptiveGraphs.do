@@ -12,6 +12,76 @@ global title title(,pos(11) size(3) color(black))
 global back plotregion(color()) graphregion(color() margin(4 4 4 4)) plotregion(lcolor(black)) 
 global graph_options ytitle(, size(small)) ylabel(#8, nogrid labsize(small) angle(0)) xtitle(, size(small)) xlabel(#12, labsize(small) angle(90) nogrid) title(, size(small) pos(11) color(black)) xsca(titlegap(*-.5)) ysca(titlegap(*-3)) plotregion(lcolor()) $back 
 
+********************************************************************************
+/// Yields by Rating Group 
+use "${tem}\yields_raw.dta", clear  
+rename volatility yield 
+keep if data == "Outcome"
+/// Compute the Average Yield of Weekly Prices 
+gen wofd= wofd(date + 1)
+/// Collapse at the weekly levels - This gets the weekly yield measure  
+gcollapse (mean) date yield , by(wofd name varlab data)
+//// Collapse by Month: Average of the 4 weeks at each month 
+gen mofd = mofd(date)
+gcollapse (mean) yield date, by(mofd varlab name data) 
+replace data = "Yield" if data == "Outcome"
+drop varlab  
+tempfile yields 
+save `yields', replace 
+
+/// Volatility by Rating Group 
+use "${cln}\synth_clean.dta", clear
+keep if data == "Outcome"
+replace data = "Volatility" if data == "Outcome"
+rename v volatility
+keep mofd volatility data name 
+tempfile volatility
+save `volatility', replace 
+
+/// Merge both datasets 
+use `yields', clear
+merge 1:1 mofd name using `volatility', keep(match master) nogen
+format mofd %tmMon_CCYY
+gen year = year(date)
+
+/// Intervention Line 
+qui sum mofd if mofd == tm(2020m4)
+local xline = r(mean)
+
+/// Post Variable 
+gen post = 0 
+replace post = 1 if mofd >= tm(2020m4)
+
+/// Statistical Summary of the Volatility during the Pre-treatment Period 
+tabstat volatility if post == 0, by(name) statistics(mean sd cv)
+
+/// Format Graph Lines 
+local line1 lcolor(black) mcolor(black) msymbol(circle) lpattern(solid) msize(vsmall) lwidth(thin)
+local line2 lcolor(cranberry) mcolor(cranberry) msymbol(circle) lpattern(dash) msize(vsmall) lwidth(thin)
+local line3 lcolor(navy) mcolor(navy) msymbol(triangle) lpattern(solid) msize(vsmall) lwidth(thin)
+local line4 lcolor(green) mcolor(green) msymbol(triangle) lpattern(dash) msize(vsmall) lwidth(thin)
+
+
+/// Graph 1. Yields 
+twoway  (connected yield mofd if name == "AAA", `line1') /// 
+		(connected yield mofd if name == "AA" , `line2') /// 
+		(connected yield mofd if name == "A"  , `line3') /// 
+		(connected yield mofd if name == "BBB", `line4'), ///
+		xline(`xline', lcolor(maroon) lpattern(dash)) ///
+	    $graph_options xtitle("") ytitle("") xlabel(#11, angle(90) labsize(vsmall)) ylabel(#10, labsize(vsmall)) /// 
+		name(gr_yields, replace) legend(off order(1 "AAA" 2 "AA" 3 "A" 4 "BBB") rows(1) cols(4) size(small)) title("Bond Yields by Credit Rating (percentage points)") 
+		
+/// Graph 2. Yields 
+twoway  (connected volatility mofd if name == "AAA", `line1') /// 
+		(connected volatility mofd if name == "AA" , `line2') /// 
+		(connected volatility mofd if name == "A"  , `line3') /// 
+		(connected volatility mofd if name == "BBB", `line4'), ///
+		xline(`xline', lcolor(maroon) lpattern(dash)) ///
+	    $graph_options xtitle("") ytitle("") xlabel(#11, angle(90) labsize(vsmall)) ylabel(#10, labsize(vsmall)) /// 
+		name(gr_volatility, replace) legend(off order(1 "AAA" 2 "AA" 3 "A" 4 "BBB") rows(1) cols(4) size(small)) title("Volatility by Credit Rating (Average SD)")  
+		
+grc1leg gr_yields gr_volatility, legendfrom(gr_yields) rows(1) cols(2) xcommon name(Figure1, replace) xsize(16) ysize(8)
+graph export "${oup}\Figure1_YieldVolatility.pdf", replace 
 
 ********************************************************************************
 /// Outcome and Donors Graph
@@ -99,38 +169,6 @@ graph export "${oup}\OutcomeSmoke2.pdf", replace
 
 
 ********************************************************************************
-// Treatement Effect Graphs 
-use "${tem}\synth_treated.dta", clear 
-global graphopts ytitle(,size(small)) ylabel(#10, nogrid labsize(small) angle(0)) title(, size(small) pos(11) color(black)) plotregion(lcolor(black)) graphregion(margin(4 4 4 4)) plotregion(lcolor(black)) xtitle("", size(small)) xlabel(#15, nogrid labsize(small) angle(0)) xline(0, lcolor(black) lpattern(dash) lwidth(thin)) yline(0 , lcolor(black) lpattern(dash) lwidth(thin)) legend(on order(1 "Observed Volatility" 2 "Synthtic Volatility") size(small) rows(1)) 
-
-
-********************************************************************************
-/// Show only the ATE window 
-keep if month_exp < ${tr_eff_window}
-********************************************************************************
-
-tab fileid 
-global rows = r(r)
-
-local title1 = "A"
-local title2 = "AA"
-local title3 = "AAA"
-local title4 = "BBB"
-
-forvalues i=1(1)$rows {
-    preserve 
-	qui keep if fileid == `i'
-	twoway (line treated month_exp, lcolor(black) lpattern(solid)) ///
-		(line synth month_exp, lcolor(navy) lpattern(dash)),  ///
-		$graphopts title("`title`i''") name(gr`i',replace)	
-	restore 
-}
-
-global combopts xcommon ycommon rows(2) cols(2)
-
-grc1leg gr3 gr2 gr1 gr4, legendfrom(gr1) name(grcomb1,replace) $combopts 
-graph export "${oup}\Synth_GraphAggregated_${tr_eff_window}.pdf", replace
-
 /*
 grc1leg gr1 gr2 gr3 gr4 gr5 gr6 gr7 gr8, legendfrom(gr1) name(grcomb1,replace) $combopts 
 graph export "${oup}\Synth_GraphCombined1.png", $export 
@@ -141,13 +179,14 @@ graph export "${oup}\Synth_GraphCombined3.png", $export
 grc1leg gr25 gr26 gr27 gr28 gr29 gr30 gr31 gr32, legendfrom(gr25) name(grcomb4,replace) $combopts 
 graph export "${oup}\Synth_GraphCombined4.png", $export 
 
+
 /// Aggregated Effect
 preserve 
 gcollapse (mean) treated synth, by(month_exp)
 	twoway (line treated month_exp, lcolor(black) lpattern(solid)) ///
 		(line synth month_exp, lcolor(navy) lpattern(dash)),  ///
 		$graphopts title("Averge Volatility: Observed vs Synthetic") name(gr_aggregated,replace)	
-	graph export "${oup}\Synth_GraphAggregated.png", $export 
+	*graph export "${oup}\Synth_GraphAggregated.png", $export 
 restore 
 */
 ********************************************************************************

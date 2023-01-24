@@ -7,7 +7,6 @@
 *** This Update: September 2022 
 ********************************************************************************
 ********************************************************************************
-
 /// Merge the Data
 use "${tem}\secondary_rating.dta", clear  
 keep date yield*
@@ -16,12 +15,9 @@ label variable yield3a "AAA Bonds"
 label variable yield2a "AA Bonds"
 label variable yielda "A Bonds"
 label variable yield3b "BBB Bonds"
-
 ********************************************************************************
-/// To use the synth package the data needs to be in a panel structure where each unit is a financial instrument. Oh boy, we need to reshape this stuff carefully. 
-/// First, lets rename the securities 
+/// To use the synth package the data needs to be in a panel structure where each unit is a financial instrument. Oh boy, we need to reshape this stuff carefully. First, lets rename the securities. 
 
-/// Rename variables to do the reshape 
 local varlist yieldnr yield3a yield2a yielda yield3b
 local i = 2
 foreach var of local varlist {
@@ -32,12 +28,12 @@ foreach var of local varlist {
 
 /// Reshape Long 
 reshape long var, i(date) j(sec_id)
+/// Rename the variable yield to volatility as we are going to use it as main outcome 
 rename var volatility 
 tsset sec_id date
 /// Drop Not Rated Issuers  
 drop if sec_id == 2
 sort sec_id date
-
 /// Names and Varlabs
 gen name = ""
 replace name = "AAA" if sec_id == 3
@@ -53,6 +49,10 @@ replace data = "Donor Prices" if data == ""
 append using  "${tem}\spgoindex.dta"
 replace data = "SP Munis" if data == ""
 ********************************************************************************
+/// Save data to do descriptive graphs 
+save "${tem}\yields_raw.dta", replace 
+********************************************************************************
+
 /// Compute the Standard Deviation of Weekly Prices 
 gen wofd= wofd(date + 1)
 /// Collapse at the weekly levels - This gets the weekly volatility measure  
@@ -151,6 +151,8 @@ rename id1 id
 tsset id month_exp
 rename volatility v 
 save "${cln}\synth_clean.dta", replace 
+
+exit 
 ********************************************************************************
 /// Save State Names 
 preserve 
@@ -179,4 +181,3 @@ twoway (line volatility mofd if treat == 1, lcolor(black) lpattern(solid)) (line
 graph export "${oup}\OutcomeComparisonMRSB_SPMuni.png", $export 
 
 
-exit 

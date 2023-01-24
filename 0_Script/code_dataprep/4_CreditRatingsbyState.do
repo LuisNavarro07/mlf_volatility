@@ -3,36 +3,17 @@
 *** Project: Volatility in the Municipal Bond Market and the MLF 
 *** Authors: Felipe Lozano & Luis Navarro 
 *** Code by: Luis Navarro 
-*** Script: Clean Bloomberg State Data and Merge with MSRB Secondary Market
-*** This Update: September 2022 
+*** Script: Map of Credit Rating By State 
+*** This Update: January 2023 
 ********************************************************************************
 ********************************************************************************
-/// Bloomberg Primary Market Bonds
-/// All Bonds (Active and Matured) issued by State Governments between 2019 and 2021
-clear 
-forvalues i=1(1)2{
-import excel "${raw}\state_bonds_bloomberg.xlsx", sheet("Sheet`i'") firstrow clear
-tempfile statebonds`i'
-save `statebonds`i'', replace 
-}
-
-use `statebonds1', clear
-append using `statebonds2'
-tempfile statebondscomplete
-save `statebondscomplete' ,replace 
-save "${tem}\PrimaryMarketStates.dta", replace 
-*******************************************************************************
-/// Keep Only CUSIPs
-keep CUSIP 
-duplicates drop CUSIP, force 
-export delimited "${tem}\cusips_msrb.txt", replace 
-
-//// Secondary Market Bonds 
-/// Import data from the full market and then match on the cusips. 
-use "${raw}\msrb_states1921.dta", clear 
-merge m:1 CUSIP using `statebondscomplete', keep(match) nogen 
-destring PAR_TRADED, replace 
-
+/// Load Bloomberg Data
+use "${tem}\PrimaryMarketStates.dta", clear 
+/// Identify Unique States
+preserve 
+gcollapse (mean) AmtIssued, by(StateCode)
+drop AmtIssued
+restore 
 /// Standardize Credit Ratings 
 /// Credit Rating 
 gen rat_emp = 0 
@@ -40,7 +21,6 @@ replace rat_emp = 1 if SPInitRtg == "#N/A N/A" & MdyInitRtg == "#N/A N/A" & Fitc
 replace SPInitRtg = "" if SPInitRtg == "#N/A N/A"
 replace MdyInitRtg = "" if MdyInitRtg == "#N/A N/A"
 replace FitchInitRtg = "" if FitchInitRtg == "#N/A N/A"
-
 
 *** Standard and Poors 
 generate StandardPoors = .
@@ -103,39 +83,57 @@ replace rating_agg = 3 if rating == 5 | rating == 6 |rating == 7
 replace rating_agg = 4 if rating == 8 | rating == 9 |rating == 10
 label define rating_agg 0 "NR" 1 "AAA" 2 "AA" 3 "A" 4 "BBB"
 label values rating_agg rating_agg
-save "${tem}\statebondsfull_secondary.dta",replace 
 
-/// Collapse Data to Have Credit Rating by Day Observations 
-use "${tem}\statebondsfull_secondary.dta",clear 
-/// Collapse the data by credit rating and day. So we are taking the average across states, fixing the credit rating. 
-gcollapse (mean) YIELD (sum) PAR_TRADED, by(rating_agg TRADE_DATE) 
-xtset rating_agg TRADE_DATE
-rename (YIELD TRADE_DATE PAR_TRADED) (yield date par)
-reshape wide yield par, i(date) j(rating_agg)
+*******************************************************************************
+gen year = year(IssueDate)
+table StateCode, content(min year)
+/// States that issued only in 2020: Arkansas, MT, MI, 
+/// States that issued only in 2021: Alabama  
+*keep if year == 2019
+gen max_rating = rating 
+gen min_rating = rating 
+gen max_ratag = rating_agg
+gen min_ratag = rating_agg
+gcollapse (min) max_ratag (max) min_ratag, by(StateCode year)
+sort StateCode year 
+label values max_ratag rating_agg 
+label values min_ratag rating_agg 
 
-global lab0 "nr" 
-global lab1 "3a" 
-global lab2 "2a" 
-global lab3 "a" 
-global lab4 "3b"
+qui statastates, abbreviation(StateCode) nogen
+drop if state_name == ""
+drop StateCode
+rename state_name state 
+/// First Rating of the Sample: Rectangularize the Dataset 
+xtset state_fips year
+fillin state_fips year
+xfill state 
+/// First Year of Issuing 
+bysort state_fips: egen minyear = min(year) if _fillin == 0 
+qui tab state_fips, matrow(F)
+local states = r(r)
 
-forvalues i=0(1)4{
-    label variable yield`i' "Yield - ${lab`i'}"
-	label variable par`i' "Par Traded - ${lab`i'}"
-	rename yield`i' yield${lab`i'}
-	rename par`i' par${lab`i'}
+matrix define S = J(`states',2, .)
+matrix colnames S = "fips" "rating"
+
+forvalues i=1(1)`states' {
+	/// Save the Fips and Min Year 
+	qui sum state_fips if state_fips == F[`i',1]
+	qui sum minyear if state_fips == F[`i',1]
+	local minyr = r(mean)
+	/// Save the Rating 
+	qui sum min_ratag if state_fips == F[`i',1] & year == `minyr'
+	local rating = r(mean)
+	/// Store the values 
+	matrix S[`i',1] =  F[`i',1]
+	matrix S[`i',2] = `rating'
 }
-save "${tem}\secondary_rating.dta",replace 
-*********************************************************************************
-/// Store the names of the states and 
 
+clear 
+svmat S 
+rename (S1 S2) (state_fips rating_agg)
+qui statastates, fips(state_fips) nogen
+label define rating_agg 0 "NR" 1 "AAA" 2 "AA" 3 "A" 4 "BBB"
+label values rating_agg rating_agg 
+drop state_name
+save "${tem}\state_ratings.dta",replace 
 
-
-exit 
-*********************************************************************************
-/// Now we will also create a variable for all the Municipal Market - Including States 
-use "${raw}\msrb_states1921.dta", clear 
-destring PAR_TRADED, replace 
-gcollapse (mean) YIELD (sum) PAR_TRADED, by(TRADE_DATE) 
-rename (YIELD TRADE_DATE PAR_TRADED) (yield_muni_market date par_muni_market)
-save "${tem}\secondary_fullmkt.dta",replace 

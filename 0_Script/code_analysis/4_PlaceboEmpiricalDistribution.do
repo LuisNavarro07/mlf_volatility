@@ -27,7 +27,7 @@ display $rows
 *******************************************************************
 /// Treatmennt Effects and Smokeplots 
 use "${tem}\placeboap.dta", clear 
-/// Goodness of Fit 
+/// Goodness of Fit (Done in the Sample with unit-free placebos)
 preserve 
 // Survival Test 
 gcollapse (mean) rmse , by(id) 
@@ -48,8 +48,8 @@ restore
 /// Merge with Placebos Final Dataset. 
 use "${tem}\synth_placebos.dta", clear 
 merge m:1 id using "${tem}\placebosforinference.dta", keep(match master) nogen
+/// Keep only the ones that survived 
 keep if survival == 1
-
 save "${tem}\placeboempiricaldistribution.dta", replace 
-
 ****************************************************************
+exit 
