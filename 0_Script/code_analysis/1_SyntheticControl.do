@@ -10,7 +10,6 @@
 
 //// Run the Synth
 use "${cln}\synth_clean.dta", clear 
-
 /// Mean of the Volatility in the Pre-treatment Period. That is, in the months from Septmeber to February 
 sort id year_exp month_exp
 qui gegen v_pre_mn = mean(v) if month_exp < ${treat_period}, by(id)
@@ -19,19 +18,15 @@ bysort id: carryforward 	v_pre_mn, replace
 qui gegen v_pre_sd = sd(v) if month_exp < ${treat_period}, by(id)
 bysort id: carryforward 	v_pre_sd, replace
 /// Normalized Variables
-gen v_norm = (v - v_pre_mn) / v_pre_sd
+qui gen v_norm = (v - v_pre_mn) / v_pre_sd
 /// Organize Dataset
 sort id year_exp month_exp
 order id treat year month year_exp month_exp v v_pre_mn v_pre_sd v_norm 
 /// Table of Treated States 
-tab id if treat==1, matrow(T)
+qui tab id if treat==1, matrow(T)
 global tr_units = r(r)
 
-
-/// Define Predictors - statistical model for matching 
-/// Match on 3 variables: observed volatility jump at 15, average January - February of t, and Average of the Complete Previous Year. 
-
-
+/// Define Predictors - statistical model for matching  
 display "$predictors"
 
 /// For Loop to Estimate the Synthetic Controls For Each Treated State 
@@ -52,7 +47,7 @@ forvalues t=1/$tr_units {
 		/// run the synth 
 		qui tsset id month_exp
 		qui tempfile SCM_id_`t'
-		synth v_norm ${predictors}, trunit(${t_id}) trperiod(${treat_period}) keep(`SCM_id_`t'') fig
+		qui synth v_norm ${predictors}, trunit(${t_id}) trperiod(${treat_period}) keep(`SCM_id_`t'') fig
 		/// Goodness of Fit MSE and Cohen D
 		/// RMSE  
 		matrix define RMSPE`t' = e(RMSPE)

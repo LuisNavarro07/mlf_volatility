@@ -10,7 +10,6 @@
 /// Merge the Data
 use "${tem}\secondary_rating.dta", clear  
 keep date yield*
-label variable yieldnr "Not Rated"
 label variable yield3a "AAA Bonds"
 label variable yield2a "AA Bonds"
 label variable yielda "A Bonds"
@@ -18,8 +17,8 @@ label variable yield3b "BBB Bonds"
 ********************************************************************************
 /// To use the synth package the data needs to be in a panel structure where each unit is a financial instrument. Oh boy, we need to reshape this stuff carefully. First, lets rename the securities. 
 
-local varlist yieldnr yield3a yield2a yielda yield3b
-local i = 2
+local varlist yield3a yield2a yielda yield3b
+local i = 1
 foreach var of local varlist {
 	global name`i' =  "`var'"
 	rename `var' var`i'
@@ -28,20 +27,20 @@ foreach var of local varlist {
 
 /// Reshape Long 
 reshape long var, i(date) j(sec_id)
+sort sec_id date
+label values sec_id .
 /// Rename the variable yield to volatility as we are going to use it as main outcome 
 rename var volatility 
 tsset sec_id date
-/// Drop Not Rated Issuers  
-drop if sec_id == 2
-sort sec_id date
+
 /// Names and Varlabs
-gen name = ""
-replace name = "AAA" if sec_id == 3
-replace name = "AA" if sec_id == 4
-replace name = "A" if sec_id == 5
-replace name = "BBB" if sec_id == 6 
-gen varlab = "State Bonds - " + name 
-gen data = "Outcome"
+qui gen name = ""
+qui replace name = "AAA" if sec_id == 1
+qui replace name = "AA" if sec_id == 2
+qui replace name = "A" if sec_id == 3
+qui replace name = "BBB" if sec_id == 4 
+qui gen varlab = "State Bonds - " + name 
+qui gen data = "Outcome"
 ********************************************************************************
 /// Append the Donors 
 append using "${tem}\bloombergprices_clean.dta"
@@ -49,17 +48,16 @@ replace data = "Donor Prices" if data == ""
 append using  "${tem}\spgoindex.dta"
 replace data = "SP Munis" if data == ""
 ********************************************************************************
-/// Save data to do descriptive graphs 
-save "${tem}\yields_raw.dta", replace 
+/// Add Yield as an outcome. This is to do the graphs 
+clonevar yield = volatility
 ********************************************************************************
-
 /// Compute the Standard Deviation of Weekly Prices 
 gen wofd= wofd(date + 1)
 /// Collapse at the weekly levels - This gets the weekly volatility measure  
-gcollapse (mean) date (sd) volatility, by(wofd name varlab data)
+gcollapse (mean) date yield (sd) volatility, by(wofd name varlab data)
 //// Collapse by Month: Average of the 4 weeks at each month 
 gen mofd = mofd(date)
-gcollapse (mean) volatility date, by(mofd varlab name data) 
+gcollapse (mean) volatility yield date, by(mofd varlab name data) 
 format mofd %tmMon_CCYY
 gen year = year(date)
 gen treat = 0 
@@ -78,17 +76,17 @@ mdesc volatility
 ********************************************************************************
 /// Now I need to express everything in Experiment Time 
 /// This variable refers to the experiment cohort 
-gen year_exp = . 
+qui gen year_exp = . 
 /// Variables to determine experiment-months. 36 periods. Treatment Happens in April of t+1, so it is the 16th period 
-gen month = month(dofm(mofd))
-gen month_exp = month 
+qui gen month = month(dofm(mofd))
+qui gen month_exp = month 
 /// Two Steps: First Save the Treated Cohort 
-replace year_exp = 1 if mofd >= tm(2019m1) & mofd <= tm(2021m12)
+qui replace year_exp = 1 if mofd >= tm(2019m1) & mofd <= tm(2021m12)
 /// Store only the treated cohort (including donors from it)
 preserve 
-drop if data == "SP Munis"
-replace month_exp = month + 12 if year == 2020 
-replace month_exp = month + 24 if year == 2021 
+qui drop if data == "SP Munis"
+qui replace month_exp = month + 12 if year == 2020 
+qui replace month_exp = month + 24 if year == 2021 
 tempfile treated 
 save `treated' , replace 
 restore 
@@ -106,14 +104,14 @@ local cohort2 mofd >= tm(2016m1) & mofd <= tm(2018m12)
 /// Keep observations at each cohort 
 forvalues i=2(1)5{
 preserve 
-keep if `cohort`i''
-sum year 
-local initial = r(min)
-replace month_exp = month + 12 if year == (`initial' + 1)
-replace month_exp = month + 24 if year == (`initial' + 2)
-replace year_exp = `i'
-tempfile cohort`i'
-save `cohort`i'', replace 
+qui keep if `cohort`i''
+qui sum year 
+qui local initial = r(min)
+qui replace month_exp = month + 12 if year == (`initial' + 1)
+qui replace month_exp = month + 24 if year == (`initial' + 2)
+qui replace year_exp = `i'
+qui tempfile cohort`i'
+qui save `cohort`i'', replace 
 restore 
 }
 
@@ -150,34 +148,48 @@ drop id
 rename id1 id 
 tsset id month_exp
 rename volatility v 
-save "${cln}\synth_clean.dta", replace 
+********************************************************************************
+/// Final Assumption: Missing observation for A rated bonds at the first period. 
+/// Assume the volatility is the same that the one observed at February 2019. 
+/// This assumption only applies to the robustness check, there is no problem 
+
+sort id mofd 
+if "${rating_agg}" == "rating_agg_var" {
+	save "${cln}\synth_clean.dta", replace 
+}
+else if  "${rating_agg}" == "rating_agg_stfix" {
+	/// Drop January 2019 - March 2019 to avoid missing outcomes.  
+	drop if month_exp <= 3
+	save "${cln}\synth_clean.dta", replace 
+}
 
 exit 
 ********************************************************************************
+/*
 /// Save State Names 
 preserve 
-keep if treat == 1 
-keep id name 
+qui keep if treat == 1 
+qui keep id name 
 duplicates drop id name, force 
 save "${tem}\treated_names.dta", replace
 restore 
 
 /// All names 
 preserve  
-keep id name year_exp
-duplicates drop id name, force 
+qui keep id name year_exp
+qui duplicates drop id name, force 
 save "${tem}\all_names.dta", replace
 restore 
 ********************************************************************************
 /// Compare the Outcomes 
 preserve 
-use `data', clear 
-keep if year >= 2019 
-drop if year == 2022 
-drop if data == "Donor Prices"
+qui use `data', clear 
+qui keep if year >= 2019 
+qui drop if year == 2022 
+qui drop if data == "Donor Prices"
 gcollapse (mean) volatility, by(mofd treat data)
 
 twoway (line volatility mofd if treat == 1, lcolor(black) lpattern(solid)) (line volatility mofd if treat == 0, lcolor(blue) lpattern(dash)), legend(on order(1 "MSRB" 2 "SP Muni Index") size(small)) ytitle("Volatility", size(small)) xlabel(#36, labsize(small) angle(90)) xtitle("") ylabel(#10, labsize(small) angle(0)) title("Comparison of Volatility Outcomes", size(small) pos(11)) name(outcomes_comp, replace)
 graph export "${oup}\OutcomeComparisonMRSB_SPMuni.png", $export 
-
+*/
 

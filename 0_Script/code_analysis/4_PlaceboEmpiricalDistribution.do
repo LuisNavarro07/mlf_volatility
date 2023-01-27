@@ -19,8 +19,7 @@ use "${tem}\synth_treated.dta", clear
 gcollapse (mean) ate cohend, by(id)
 list id ate cohend
 sum cohend, detail 
-list 
-tab id
+qui tab id
 global rows = r(N)
 display $rows
 
@@ -32,16 +31,15 @@ preserve
 // Survival Test 
 gcollapse (mean) rmse , by(id) 
 qui cumul rmse, gen(ecdf)
-gsort -ecdf
+qui gsort -ecdf
 qui gen survival = rmse < (1-$rmspe_cutoff)
 qui egen survrate = mean(survival)
-sum survrate
 gsort survival id 
 sum survrate
 local survrate = round(r(mean),0.001)
 local donors = round(r(sum),1)
 local tot = round(r(N),1)
-twoway line ecdf rmse, sort xline($rmspe_cutoff, lcolor(black)) name(survival,replace) title("Placebo Distribution - Survival Rate `survrate' - `donors' out of `tot donors'",size(small))
+*twoway line ecdf rmse, sort xline($rmspe_cutoff, lcolor(black)) name(survival,replace) title("Placebo Distribution - Survival Rate `survrate' - `donors' out of `tot donors'",size(small))
 save "${tem}\placebosforinference.dta", replace 
 restore 
 

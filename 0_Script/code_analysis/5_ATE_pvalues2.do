@@ -7,7 +7,6 @@
 /// Script: Average Treatment Effect Analysis by Treated Units  
 *************************************************************************
 *************************************************************************
-*graph drop _all 
 /// Load Synthetic Control Estimates for Treated Units 
 use "${tem}\synth_treated.dta", clear 
 tab fileid
@@ -18,7 +17,6 @@ local title1 = "A"
 local title2 = "AA"
 local title3 = "AAA"
 local title4 = "BBB"
-
 
 /// Define Matrix To Store Values 
 matrix define R=J(10,$cols,.)
@@ -43,7 +41,6 @@ forvalues j = 1(1)$cols {
 	/// Baseline: Observed Volatility 
 	qui sum treat_lev if month_exp >=0 & month_exp <= ${tr_eff_window}
 	local baseline = r(mean)
-	mat R[7,`j'] = `baseline'
 	/// Synthetic Volatility 
 	/// Percent Change: Obs Volatility / Synth Volatility - 1
 	qui sum synth_lev if month_exp >=0 & month_exp <= ${tr_eff_window}
@@ -56,7 +53,10 @@ forvalues j = 1(1)$cols {
 	/// ID
 	qui sum id 
 	mat R[10,`j'] = r(mean)
- 
+	/// Mean of Dependent Variable in the Pre-treatment Period (Excluding March 2020)
+	qui sum treat_lev if month_exp < -1 
+	local pre_mean = r(mean)
+	mat R[7,`j'] = `pre_mean'
 	/// 2.- Count How Many times the ATE for the treated unit exceeds the ATE at the placebo empirical distribution 
 	qui use "${tem}\placeboempiricaldistribution.dta", clear 
 	/// keep only the empirical distribution of credit rating j 
@@ -128,8 +128,8 @@ qui gen point_pos = strpos(`var',".")
 qui replace `var' = substr(`var',1,point_pos + 4) 
 qui gen negdec = strpos(`var',"-.")
 qui replace `var' = substr(`var',2,point_pos + 4) if negdec == 1
-qui replace `var' = "0" + `var' if strpos(M1,".") == 1 & negdec == 0 
-qui replace `var' = "-0" + `var' if strpos(M1,".") == 1 & negdec == 1
+qui replace `var' = "0" + `var' if strpos(`var',".") == 1 & negdec == 0 
+qui replace `var' = "-0" + `var' if strpos(`var',".") == 1 & negdec == 1
 qui replace `var' = "0" + `var' if length(`var') == 5 
 qui drop point_pos negdec
 }
@@ -167,50 +167,13 @@ replace names = "RMSPE" if _n == 8
 drop id1
 rename (names b1 b2 b3 b4) (Results A AA AAA BBB)
 order Results AAA AA A BBB
-*******************************************************************************
-save "${tem}\ATE_Results_Full.dta", replace 
 ********************************************************************************
-///Crosswalks for months 
-use "${cln}\synth_clean.dta", clear 
-replace month_exp = month_exp - ${treat_period}
-drop if treat == 0 
-keep month_exp mofd
-duplicates drop mofd, force 
-tempfile dates
-save `dates', replace 
-
-/// Treatment Effect by Period 
-qui use "${tem}\synth_treated.dta", clear
-/// Estimate the Average Treatment Effect for the specific window 
-egen group = group(id fileid)
-qui drop ate
-
-forvalues i=1(1)$treat_period {
-bysort group: egen ate`i' = mean(tr_eff) if month_exp >=0 & month_exp <= `i'
+if "${rating_agg}" == "rating_agg_var" {
+	save "${tem}\ATE_Results_Full.dta", replace 
 }
-qui gcollapse (mean) ate*, by(id)
-reshape long ate, i(id) j(month_exp)
+else if  "${rating_agg}" == "rating_agg_stfix" {
+	save "${tem}\ATE_Results_Robustness_Stfix.dta", replace 
+}
 
-merge m:1 month_exp using `dates', keep(match master) nogen
-
-label define id 1 "A" 2 "AA" 3 "AAA" 4 "BBB"
-label values id id 
-
-twoway (line ate mofd if id == 1, lcolor(black) lwidth(thin)) ///
-		(line ate mofd if id == 2, lcolor(blue) lwidth(thin)) ///
-		(line ate mofd if id == 3, lcolor(cranberry) lwidth(thin)) ///
-		(line ate mofd if id == 4, lcolor(green) lwidth(thin)), ///
-		xlabel(#16, labsize(small) angle(90)) ylabel(#10, labsize(small) angle(0)) title("Cumulative ATE - Months After the Intervention", size(medsmall) pos(11)) name(cumulativeate, replace) yline(0, lpattern(dash)) legend(on order(1 "A" 2 "AA" 3 "AAA" 4 "BBB") rows(1)) ytitle("") xtitle("")
-graph export "${oup}\cumulativeate.pdf", replace 
-
-/*		
-twoway (line ate mofd, lcolor(black) lwidth(thin)), ///
-		xlabel(#16, labsize(small) angle(90)) ylabel(#10, labsize(small) angle(0)) title("Cumulative ATE - Months After the Intervention", size(medsmall) pos(11)) name(cumulativeate2, replace) yline(0, lpattern(dash)) legend(off order(1 "A" 2 "AA" 3 "AAA" 4 "BBB") rows(1)) ytitle("") xtitle("") by(id) label
-*/		
-
-
-
-		
-
-
+********************************************************************************
 exit 

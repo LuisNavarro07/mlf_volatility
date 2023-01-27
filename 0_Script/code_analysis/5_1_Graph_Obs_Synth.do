@@ -3,7 +3,7 @@
 /// Project: Volatility in the Municipal Bond Market and the MLF
 /// Authors: Felipe Lozano & Luis Navarro
 /// Code: Luis Navarro 
-/// Update: August 2022 
+/// Update: January 2023 
 /// Script: Average Treatment Effect Graph
 *************************************************************************
 *************************************************************************
@@ -34,7 +34,15 @@ forvalues i=1(1)$rows {
 
 global combopts xcommon rows(2) cols(2)
 
-grc1leg gr3 gr2 gr1 gr4, legendfrom(gr1) name(grcomb1,replace) $combopts 
+grc1leg gr3 gr2 gr1 gr4, legendfrom(gr1) name(grcomb1_synt,replace) $combopts 
 
-graph export "${oup}\Figure2_ObservedSynthVolatility.pdf", replace 
+if "${rating_agg}" == "rating_agg_var" {
+	graph export "${oup}\Figure2_ObservedSynthVolatility.pdf", replace 
+}
+else if  "${rating_agg}" == "rating_agg_stfix" {
+	graph export "${oup}\Figure2_ObservedSynthVolatility_RCStfix.pdf", replace 
+}
+
+
+
 

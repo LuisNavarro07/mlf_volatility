@@ -7,7 +7,7 @@
 /// Script: Smokeplots for all Treated Units 
 *************************************************************************
 *************************************************************************
-graph drop _all 
+*graph drop _all 
 global smokeopts lcolor(gray*0.8) lwidth(vthin) lpattern(solid)
 global title title(,pos(11) size(3) color(black))
 global back plotregion(color()) graphregion(color() margin(4 4 4 4)) plotregion(lcolor(black)) 
@@ -29,7 +29,7 @@ use "${tem}\synth_treated.dta", clear
 qui gen treat = 1 
 append using "${tem}\placeboempiricaldistribution.dta", force  
 qui replace treat = 0 if treat == . 
-tab fileid, matrow(F)
+qui tab fileid, matrow(F)
 global rows = r(r)
 *merge m:1 id using "${tem}\treated_names.dta", keep(match master) nogen 
 
@@ -52,7 +52,7 @@ use "${tem}\ATE_Results_Full.dta", clear
 order Results A AA AAA BBB 
 rename (A AA AAA BBB) (b1 b2 b3 b4)
 keep Results b`j'
-keep if Results == "ATE" | Results == "\% Change" | Results == "RMSPE"
+qui keep if Results == "ATE" | Results == "\% Change" | Results == "RMSPE"
 qui replace b`j' = subinstr(b`j',"***","",1)
 qui replace b`j' = subinstr(b`j',"**","",1)
 qui replace b`j' = subinstr(b`j',"*","",1)
@@ -61,9 +61,6 @@ qui destring b`j', replace
 local ate =     b`j'[1]
 local pchange = b`j'[2]
 local rmspe =   b`j'[3]
-dis `ate'
-dis `pchange'
-dis `rmspe'
 restore 
 
 
@@ -72,14 +69,13 @@ preserve
 qui keep if fileid == `j'
 sort id month_exp
 /// Save Treatment Effects and Statistics 
-matlist M 
 /// Create Percentile Variables 
-gen p1 = . 
-gen p2 = . 
-gen p5 = . 
-gen p95 = . 
-gen p97 = . 
-gen p99 = . 
+qui gen p1 = . 
+qui gen p2 = . 
+qui gen p5 = . 
+qui gen p95 = . 
+qui gen p97 = . 
+qui gen p99 = . 
 
 /// Create Percentile Variables For each Experiment Month. So, for any period it will compute the percentiles at such period across all donor units, to then save it with the treated units. 
 forvalues t= -15(1)20 {
@@ -108,47 +104,13 @@ restore
 }
 
 graph combine gr3 gr2 gr1 gr4, name(grcomb1,replace) xcommon  
-graph export "${oup}\Figure3_SmokeplotCombined.pdf", replace
+/// Export the Smoke Plot
+if "${rating_agg}" == "rating_agg_var" {
+	graph export "${oup}\Figure3_SmokeplotCombined.pdf", replace 
+}
+else if  "${rating_agg}" == "rating_agg_stfix" {
+	graph export "${oup}\Figure3_SmokeplotCombined_RCStfix.pdf", replace
+}
 
 
-********************************************************************************
-/// Export Tables 	
-use "${tem}\ATE_Results_Full.dta", clear
-rename (b1 b2 b3 b4) (A AA AAA BBB)
-order Results AAA AA A BB
-texsave * using "${oup}\ATE_Results_Full_${tr_eff_window}.tex", replace  decimalalign nofix 
-
-preserve
-drop if _n >5  
-texsave * using "${oup}\ATE_Results_${tr_eff_window}.tex", replace decimalalign nofix 
-restore
-
-********************************************************************************
-
-/*
-grc1leg gr1 gr2 gr3 gr4 gr5 gr6 gr7 gr8, legendfrom(gr1) name(grcomb1,replace) $combopts 
-graph export "${oup}\SmokeCombined1.png", $export 
-grc1leg gr9 gr10 gr11 gr12 gr13 gr14 gr15 gr16, legendfrom(gr9) name(grcomb2,replace) $combopts 
-graph export "${oup}\SmokeCombined2.png", $export 
-grc1leg gr17 gr18 gr19 gr20 gr21 gr22 gr23 gr24, legendfrom(gr17) name(grcomb3,replace) $combopts 
-graph export "${oup}\SmokeCombined3.png", $export 
-grc1leg gr25 gr26 gr27 gr28 gr29 gr30 gr31 gr32, legendfrom(gr25) name(grcomb4,replace) $combopts 
-graph export "${oup}\SmokeCombined4.png", $export 
-*/
-
-/*
-//// Aggregated SmokePlot 
-preserve 
-bysort month_exp: egen max = max(tr_eff) if treat == 0 
-bysort month_exp: egen min = min(tr_eff) if treat == 0 
-gsort -treat month_exp 
-gcollapse (mean) tr_eff max min, by(month_exp treat)
-qui gen xzero = 0 
-twoway 	(rarea max min month_exp if treat == 0, sort fcolor(gray*0.4) lcolor(gray) fintensity(inten50)) ///
-		(line tr_eff month_exp if treat == 1, sort lcolor(maroon) lpattern(solid)) ///
-		(line xzero month_exp if treat == 1, sort lcolor(black) lpattern(dash) lwidth(thin)), ///
-		xline(0 , lcolor(black) lpattern(dash) lwidth(thin)) yline(0 , lcolor(black) lpattern(dash) lwidth(thin)) $graph_options name(sp_ag, replace) title("Average Treatment Effect - Smokeplot", size(medsmall) pos(11)) 
-graph export "${oup}\SmokeAggregated.png", $export
-restore 
-*/
 exit 

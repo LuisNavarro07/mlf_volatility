@@ -18,7 +18,7 @@ display $don
 
 /// Store the pre-treatment mean and variance of the treated units 
 qui use "${cln}\synth_clean.dta", clear 
-sort id year_exp month_exp
+qui sort id year_exp month_exp
 qui gegen v_pre_mn = mean(v) if month_exp < ${treat_period}, by(id)
 bysort id: carryforward 	v_pre_mn, replace   
 /// Standard Deviation of each instrument in the Pre-treatment Period
@@ -74,7 +74,6 @@ qui drop if _n >= 1
 forvalues i = 1(1)$rows{
 qui append using `placebo_out`i''
 }
-sort fileid id month_exp
-replace month_exp = month_exp - ${treat_period} 
-tab month_exp
+qui sort fileid id month_exp
+qui replace month_exp = month_exp - ${treat_period} 
 save "${tem}\synth_placebos.dta", replace 
