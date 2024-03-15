@@ -1,0 +1,24 @@
+\documentclass{article}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage[margin=1in]{geometry}
+\usepackage{siunitx}
+\begin{document}
+
+\begin{table}[tbp] \centering
+\newcolumntype{C}{>{\centering\arraybackslash}X}
+
+\begin{tabularx}{\linewidth}{lSSSS}
+
+\toprule
+{Results}&{AAA}&{AA}&{A}&{BBB} \tabularnewline
+\midrule \addlinespace[\belowrulesep]
+{ATE}&{-0.1638***}&{-0.2499***}&{-0.1509***}&0.0630 \tabularnewline
+{SE}&{(0.0559)}&{(0.0649)}&{(0.0637)}&{(0.0723)} \tabularnewline
+{\% Change}&{-53.5930\%}&{-69.9440\%}&{-33.3790\%}&{25.2640\%} \tabularnewline
+{P-Value (One Tail)}&0.0000&0.0000&0.0000&0.0570 \tabularnewline
+\bottomrule 
+
+\end{tabularx}
+\end{table}
+\end{document}

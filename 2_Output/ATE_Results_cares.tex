@@ -1,0 +1,30 @@
+\documentclass{article}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage[margin=1in]{geometry}
+\usepackage{siunitx}
+\begin{document}
+
+\begin{table}[tbp] \centering
+\newcolumntype{R}{>{\raggedleft\arraybackslash}X}
+\newcolumntype{L}{>{\raggedright\arraybackslash}X}
+\newcolumntype{C}{>{\centering\arraybackslash}X}
+
+\begin{tabularx}{\linewidth}{@{}lSSSSSSSS@{}}
+
+\toprule
+{Results}&{b5}&{b6}&{b3}&{b4}&{b1}&{b2}&{b7}&{b8} \tabularnewline
+\midrule \addlinespace[\belowrulesep]
+{Average Treatment Effect (a)}&{-0.1858***}&{-0.2428***}&{-0.1697***}&0.0006&0.0462&{-0.1921***}&0.4337&-0.0578 \tabularnewline
+{}&{(0.0499)}&{(0.0518)}&{(0.0514)}&{(0.0447)}&{(0.0623)}&{(0.0539)}&{(0.0855)}&{(0.0806)} \tabularnewline
+{Historic Volatility (b)}&0.1995&0.3183&0.1676&0.1518&0.2224&0.2393&0.4569&0.3683 \tabularnewline
+{Volatility March 2020 (c)}&0.4783&0.5074&0.4355&0.4048&0.6065&0.4761&0.5395&0.5565 \tabularnewline
+{Excess Volatility (d = c - b)}&0.2788&0.1891&0.2678&0.2530&0.3841&0.2369&0.0826&0.1882 \tabularnewline
+{ATE, % Excess Volatility (e = d/a)}&{66.6290\%}&{128.3999\%}&{63.3718\%}&{0.2569\%}&{12.0388\%}&{81.0983\%}&{NA}&{30.7029\%} \tabularnewline
+{P-Value (Left Tail)}&0.0000&0.0000&0.0000&0.5830&0.9260&0.0000&0.9940&0.0910 \tabularnewline
+{RMSPE}&0.0015&0.0076&0.0042&0.0016&0.0005&0.0027&0.0125&0.0115 \tabularnewline
+\bottomrule 
+
+\end{tabularx}
+\end{table}
+\end{document}
