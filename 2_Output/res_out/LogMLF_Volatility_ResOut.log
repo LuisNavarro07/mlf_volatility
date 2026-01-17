@@ -1,0 +1,947 @@
+
+. timer on 5
+
+. /// This version of the analysis is done with a residualized outcome
+> /// Data Cleaning and Preparation
+> ********************************************************************************
+. /// 0) Clean Bloomberg Prices of Potential Donors
+> do "${cod}/code_dataprep/0_BloombergPrices.do" 
+
+. ********************************************************************************
+. ********************************************************************************
+. *** Project: Volatility in the Municipal Bond Market and the MLF 
+. *** Authors: Felipe Lozano & Luis Navarro 
+. *** Code by: Luis Navarro 
+. *** Script: Clean Bloomberg Prices 
+. *** This Update: September 2022 
+. ********************************************************************************
+. ********************************************************************************
+. clear all 
+
+. /// Bloomberg Prices 
+> forvalues i=1(1)17{
+  2. qui import excel "${raw}/BloombergPrices.xlsx", firstrow sheet("Sheet`i'") clear case(lower)
+  3. tempfile price`i'
+  4. qui save `price`i'', replace 
+  5. }
+
+. 
+. use `price2', clear
+
+. qui merge 1:1 date using `price1', keep(match master) nogen
+
+. forvalues i=3(1)17{
+  2. qui merge 1:1 date using `price`i'', keep(match master) nogen
+  3. }
+
+. 
+. drop c1comdty wacomdty o1comdty s1comdty
+
+. qui destring _all, replace 
+
+. gen yr = year(date)
+
+. drop if yr == 2018 
+(237 observations deleted)
+
+. 
+. // Drop all variables that we don't have at least 95% of total observationbs
+. global all ctpen10ygovt ctcad10ygovt ctskk10ygovt ctkrw10ygovt ctdop10ygovt ctjmd10ygovt ctitl10ygovt ctngn10ygovt ctfim10ygovt ctpte10ygovt
+>  ctmxn10ygovt ctcop10ygovt ctchf10ygovt ctclp10ygovt ctcny10ygovt ctrub10ygovt spxindex ftsemibindex nkyindex induindex mexbolindex ctthb10y
+> govt egpt10yindex ctsgd10ygovt ctdkk10ygovt ctsek10ygovt ctaud10ygovt ctats10ygovt cthkd10ygovt clacomdty coacomdty sbacomdty coalinequity x
+> b1comdty ng1comdty gc1comdty si1comdty hg1comdty xptusdcurrncy cc1comdty lc1comdty ho1comdty qs1comdty jx1comdty rr1comdty sm1comdty bo1comd
+> ty rs1comdty kc1comdty jo1comdty lb1comdty or1comdty dl1comdty fc1comdty lh1comdty ctfrf9ygovt ctesp9ygovt ctsar10ygovt ctdem9ygovt ctinr9yg
+> ovt ctbef9ygovt ctgrd20ygovt ctiep3ygovt ctnok3ygovt ctuah3ygovt ctrub3ygovt ctats3ygovt ctczk3ygovt ctdkk3ygovt ctdkk5ygovt ctskk5ygovt ctb
+> ef3ygovt ctdemii5y ctinr2ygovt ctsar2ygovt ctcny3ygovt cthkd5ygovt ctbrl5ygovt ctbrlii30tgovt ctbrl3ygovt ctnzd5ygovt ctpln2ygovt ctngn2ygov
+> t ctjpyii5ygovt cteurhr9ygvot cteurlt2ygvot ctzar10ygovt ctgbpii5ygovt ctgbp10ygovt ctmry5ygovt ctgtq20ygovt ctlvl2ygovt cteurro6ygovt ctyhb
+> 2ygovt ctphp2ygovt daxindex cacindex aexindex ibexindex omxindex smiindex bsxindex igpaindex buxindex rtsiindex saxindex egx30index kse100in
+> dex nse200index hisindex kospiindex sensexindex shsz300index as51index atxindex aseindex bel20index omxc25index hexindex icexiindex croxinde
+> x ctxeurindex rotxlindex utxeurindex tpxindex
+
+. 
+. local varlist ${all}
+
+. foreach var of local varlist {
+  2.         quietly mdesc `var' 
+  3.         if r(percent) > 5 {
+  4.                 drop `var'
+  5.         }
+  6. }
+
+. 
+. global vars ctjmd10ygovt ctmxn10ygovt ctchf10ygovt ctclp10ygovt spxindex ftsemibindex induindex mexbolindex ctsek10ygovt clacomdty coacomdty
+>  coalinequity xb1comdty ng1comdty gc1comdty si1comdty hg1comdty xptusdcurrncy cc1comdty lc1comdty ho1comdty qs1comdty rr1comdty sm1comdty bo
+> 1comdty rs1comdty kc1comdty jo1comdty lb1comdty or1comdty dl1comdty fc1comdty lh1comdty ctfrf9ygovt ctgrd20ygovt ctiep3ygovt ctnok3ygovt ctc
+> zk3ygovt ctdkk3ygovt ctdkk5ygovt ctbef3ygovt ctdemii5y ctbrl5ygovt ctbrlii30tgovt ctbrl3ygovt ctnzd5ygovt ctpln2ygovt cteurlt2ygvot ctzar10y
+> govt ctgbpii5ygovt ctgbp10ygovt ctlvl2ygovt cteurro6ygovt daxindex cacindex aexindex ibexindex omxindex smiindex bsxindex igpaindex buxindex
+>  rtsiindex saxindex kse100index nse200index hisindex kospiindex sensexindex as51index atxindex aseindex bel20index omxc25index hexindex icex
+> iindex croxindex ctxeurindex rotxlindex utxeurindex
+
+. 
+. 
+. /// Assumption -- Carryforward for missing spaces 
+> sort date
+
+. tsset date
+
+Time variable: date, 1/2/2019 to 12/31/2021, but with gaps
+        Delta: 1 day
+
+. local varlist $vars
+
+. foreach var of local varlist {
+  2.     qui carryforward `var', replace 
+  3. }
+
+. 
+. mdesc 
+
+    Variable    |     Missing          Total     Percent Missing
+----------------+-----------------------------------------------
+           date |           0            776           0.00
+   ctjmd10ygovt |           0            776           0.00
+   ctmxn10ygovt |           0            776           0.00
+   ctchf10ygovt |           1            776           0.13
+   ctclp10ygovt |           0            776           0.00
+       spxindex |           0            776           0.00
+   ftsemibindex |           0            776           0.00
+      induindex |           0            776           0.00
+    mexbolindex |           0            776           0.00
+   ctsek10ygovt |           0            776           0.00
+      clacomdty |           0            776           0.00
+      coacomdty |           0            776           0.00
+   coalinequity |           0            776           0.00
+      xb1comdty |           0            776           0.00
+      ng1comdty |           0            776           0.00
+      gc1comdty |           0            776           0.00
+      si1comdty |           0            776           0.00
+      hg1comdty |           0            776           0.00
+   xptusdcurr~y |           0            776           0.00
+      cc1comdty |           0            776           0.00
+      lc1comdty |           0            776           0.00
+      ho1comdty |           0            776           0.00
+      qs1comdty |           0            776           0.00
+      rr1comdty |           0            776           0.00
+      sm1comdty |           0            776           0.00
+      bo1comdty |           0            776           0.00
+      rs1comdty |           0            776           0.00
+      kc1comdty |           0            776           0.00
+      jo1comdty |           0            776           0.00
+      lb1comdty |           0            776           0.00
+      or1comdty |           0            776           0.00
+      dl1comdty |           0            776           0.00
+      fc1comdty |           0            776           0.00
+      lh1comdty |           0            776           0.00
+    ctfrf9ygovt |           0            776           0.00
+   ctgrd20ygovt |           0            776           0.00
+    ctiep3ygovt |           0            776           0.00
+    ctnok3ygovt |           0            776           0.00
+    ctczk3ygovt |           0            776           0.00
+    ctdkk3ygovt |           0            776           0.00
+    ctdkk5ygovt |           0            776           0.00
+    ctbef3ygovt |           0            776           0.00
+      ctdemii5y |           0            776           0.00
+    ctbrl5ygovt |           0            776           0.00
+   ctbrlii30t~t |           0            776           0.00
+    ctbrl3ygovt |           0            776           0.00
+    ctnzd5ygovt |           1            776           0.13
+    ctpln2ygovt |           0            776           0.00
+   cteurlt2yg~t |           0            776           0.00
+   ctzar10ygovt |           0            776           0.00
+   ctgbpii5yg~t |           0            776           0.00
+   ctgbp10ygovt |           0            776           0.00
+    ctlvl2ygovt |           0            776           0.00
+   cteurro6yg~t |           0            776           0.00
+       daxindex |           0            776           0.00
+       cacindex |           0            776           0.00
+       aexindex |           0            776           0.00
+      ibexindex |           0            776           0.00
+       omxindex |           0            776           0.00
+       smiindex |           1            776           0.13
+       bsxindex |           0            776           0.00
+      igpaindex |           0            776           0.00
+       buxindex |           0            776           0.00
+      rtsiindex |           1            776           0.13
+       saxindex |           0            776           0.00
+    kse100index |           0            776           0.00
+    nse200index |           0            776           0.00
+       hisindex |           0            776           0.00
+     kospiindex |           0            776           0.00
+    sensexindex |           0            776           0.00
+      as51index |           0            776           0.00
+       atxindex |           0            776           0.00
+       aseindex |           0            776           0.00
+     bel20index |           0            776           0.00
+    omxc25index |           0            776           0.00
+       hexindex |           0            776           0.00
+     icexiindex |           0            776           0.00
+      croxindex |           0            776           0.00
+    ctxeurindex |           0            776           0.00
+     rotxlindex |           1            776           0.13
+    utxeurindex |           0            776           0.00
+             yr |           0            776           0.00
+----------------+-----------------------------------------------
+
+. 
+. *********************************************************************************
+. /// Build the Outcome 
+> 
+. 
+. /// Describe the Variables 
+> describe $vars
+
+Variable      Storage   Display    Value
+    name         type    format    label      Variable label
+----------------------------------------------------------------------------------------------------------------------------------------------
+ctjmd10ygovt    double  %10.0g              * CTJMD10Y Govt
+ctmxn10ygovt    double  %10.0g              * CTMXN10Y Govt
+ctchf10ygovt    double  %10.0g              * CTCHF10Y Govt
+ctclp10ygovt    double  %10.0g              * CTCLP10Y Govt
+spxindex        double  %10.0g              * SPX Index
+ftsemibindex    double  %10.0g              * FTSEMIB Index
+induindex       double  %10.0g              * INDU Index
+mexbolindex     double  %10.0g              * MEXBOL Index
+ctsek10ygovt    double  %10.0g              * CTSEK10Y Govt
+clacomdty       double  %10.0g              * CLA Comdty
+coacomdty       double  %10.0g              * COA Comdty
+coalinequity    double  %10.0g              * COAL IN Equity
+xb1comdty       double  %10.0g              * XB1 Comdty
+ng1comdty       double  %10.0g              * NG1 Comdty
+gc1comdty       double  %10.0g              * GC1 Comdty
+si1comdty       double  %10.0g              * SI1 Comdty
+hg1comdty       double  %10.0g              * HG1 Comdty
+xptusdcurrncy   double  %10.0g              * XPTUSD Currncy
+cc1comdty       int     %10.0g              * CC1 Comdty
+lc1comdty       double  %10.0g              * LC1 Comdty
+ho1comdty       double  %10.0g              * HO1 Comdty
+qs1comdty       double  %10.0g              * QS1 Comdty
+rr1comdty       double  %10.0g              * RR1 Comdty
+sm1comdty       double  %10.0g              * SM1 Comdty
+bo1comdty       double  %10.0g              * BO1 Comdty
+rs1comdty       double  %10.0g              * RS1 Comdty
+kc1comdty       double  %10.0g              * KC1 Comdty
+jo1comdty       double  %10.0g              * JO1 Comdty
+lb1comdty       double  %10.0g              * LB1 Comdty
+or1comdty       double  %10.0g              * OR1 Comdty
+dl1comdty       double  %10.0g              * DL1 Comdty
+fc1comdty       double  %10.0g              * FC1 Comdty
+lh1comdty       double  %10.0g              * LH1 Comdty
+ctfrf9ygovt     double  %10.0g              * CTFRF9Y Govt
+ctgrd20ygovt    double  %10.0g              * CTGRD20Y GOVT
+ctiep3ygovt     double  %10.0g              * CTIEP3Y GOVT
+ctnok3ygovt     double  %10.0g              * CTNOK3Y GOVT
+ctczk3ygovt     double  %10.0g              * CTCZK3Y GOVT
+ctdkk3ygovt     double  %10.0g              * CTDKK3Y GOVT
+ctdkk5ygovt     double  %10.0g              * CTDKK5Y GOVT
+ctbef3ygovt     double  %10.0g              * CTBEF3Y GOVT
+ctdemii5y       double  %10.0g              * CTDEMII5Y
+ctbrl5ygovt     double  %10.0g              * CTBRL5Y GOVT
+ctbrlii30tgovt  double  %10.0g              * CTBRLII30T GOVT
+ctbrl3ygovt     double  %10.0g              * CTBRL3Y GOVT
+ctnzd5ygovt     double  %10.0g              * CTNZD5Y GOVT
+ctpln2ygovt     double  %10.0g              * CTPLN2Y GOVT
+cteurlt2ygvot   double  %10.0g              * CTEURLT2Y GVOT
+ctzar10ygovt    double  %10.0g              * CTZAR10Y GOVT
+ctgbpii5ygovt   double  %10.0g              * CTGBPII5Y GOVT
+ctgbp10ygovt    double  %10.0g              * CTGBP10Y GOVT
+ctlvl2ygovt     double  %10.0g              * CTLVL2Y GOVT
+cteurro6ygovt   double  %10.0g              * CTEURRO6Y GOVT
+daxindex        double  %10.0g              * DAX Index
+cacindex        double  %10.0g              * CAC Index
+aexindex        double  %10.0g              * AEX Index
+ibexindex       double  %10.0g              * IBEX Index
+omxindex        double  %10.0g              * OMX Index
+smiindex        double  %10.0g              * SMI Index
+bsxindex        double  %10.0g              * BSX Index
+igpaindex       double  %10.0g              * IGPA Index
+buxindex        double  %10.0g              * BUX Index
+rtsiindex       double  %10.0g              * RTSI Index
+saxindex        double  %10.0g              * SAX Index
+kse100index     double  %10.0g              * KSE100 Index
+nse200index     double  %10.0g              * NSE200 Index
+hisindex        double  %10.0g              * HIS Index
+kospiindex      double  %10.0g              * KOSPI Index
+sensexindex     double  %10.0g              * SENSEX Index
+as51index       double  %10.0g              * AS51 Index
+atxindex        double  %10.0g              * ATX Index
+aseindex        double  %10.0g              * ASE Index
+bel20index      double  %10.0g              * BEL20 Index
+omxc25index     double  %10.0g              * OMXC25 Index
+hexindex        double  %10.0g              * HEX Index
+icexiindex      double  %10.0g              * ICEXI Index
+croxindex       double  %10.0g              * CROX Index
+ctxeurindex     double  %10.0g              * CTXEUR Index
+rotxlindex      double  %10.0g              * ROTXL Index
+utxeurindex     double  %10.0g              * UTXEUR Index
+
+. tempfile varnames
+
+. descsave $vars, saving(`varnames', replace)
+(file /var/folders/vz/nb4bfqj162nf95qr4tqrffgr0000gn/T//S_55156.00000i not found)
+file /var/folders/vz/nb4bfqj162nf95qr4tqrffgr0000gn/T//S_55156.00000i saved as .dta format
+
+. 
+. preserve 
+
+. use `varnames', clear
+
+. keep order name varlab 
+
+. gen sec_id = order + 1
+
+. drop order 
+
+. save `varnames', replace 
+file /var/folders/vz/nb4bfqj162nf95qr4tqrffgr0000gn/T//S_55156.00000i saved as .dta format
+
+. restore 
+
+. 
+. 
+. local varlist $vars
+
+. local i = 2
+
+. foreach var of local varlist {
+  2.         global name`i' =  "`var'"
+  3.         rename `var' var`i'
+  4.         local i = `i' + 1
+  5. }
+
+. 
+. reshape long var, i(date) j(sec_id)
+(j = 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 5
+> 0 51 52 53 54 55 56 57 58 59 60 61 62 63 64 65 66 67 68 69 70 71 72 73 74 75 76 77 78 79 80 81)
+
+Data                               Wide   ->   Long
+-----------------------------------------------------------------------------
+Number of observations              776   ->   62,080      
+Number of variables                  82   ->   4           
+j variable (80 values)                    ->   sec_id
+xij variables:
+                    var2 var3 ... var81   ->   var
+-----------------------------------------------------------------------------
+
+. drop yr 
+
+. merge m:1 sec_id using `varnames', keep(match master) nogen 
+(variable sec_id was byte, now float to accommodate using data's values)
+
+    Result                      Number of obs
+    -----------------------------------------
+    Not matched                             0
+    Matched                            62,080  
+    -----------------------------------------
+
+. rename var volatility 
+
+. ********************************************************************************
+. /// Add Yield as an outcome. This is to do the graphs 
+> clonevar yield = volatility
+(5 missing values generated)
+
+. ********************************************************************************
+. save "${tem}/bloombergprices_clean.dta", replace 
+file 1_Data/Temp//bloombergprices_clean.dta saved
+
+. 
+. exit 
+
+end of do-file
+
+. /// 0) CARES Ranking for Robustness Check 
+> do "${cod}/code_dataprep/0_CARES_Ranking.do"
+
+. ********************************************************************************
+. ********************************************************************************
+. *** Project: Volatility in the Municipal Bond Market and the MLF 
+. *** Authors: Felipe Lozano & Luis Navarro 
+. *** Code by: Luis Navarro 
+. *** Script: CARES Act Distribution Categorization 
+. *** This Update: January 2023 
+. ********************************************************************************
+. ********************************************************************************
+. /// Population Estimates
+> import delimited "${raw}/nst-est2019-alldata.csv", clear varnames(1)
+(encoding automatically selected: ISO-8859-1)
+(151 vars, 57 obs)
+
+. drop if state == 0 
+(5 observations deleted)
+
+. statastates, name(name)
+(52 real changes made)
+
+    Result                      Number of obs
+    -----------------------------------------
+    Not matched                             1
+        from master                         1  (_merge==1)
+        from using                          0  (_merge==2)
+
+    Matched                                51  (_merge==3)
+    -----------------------------------------
+
+. drop if state_fips == .
+(1 observation deleted)
+
+. keep state_fips popestimate2019
+
+. tempfile population
+
+. save `population', replace 
+(file /var/folders/vz/nb4bfqj162nf95qr4tqrffgr0000gn/T//S_55156.000001 not found)
+file /var/folders/vz/nb4bfqj162nf95qr4tqrffgr0000gn/T//S_55156.000001 saved as .dta format
+
+. 
+. /// CRF Allocations 
+> import excel "${raw}/crf_allocations.xlsx", sheet("Sheet1") firstrow clear 
+(3 vars, 50 obs)
+
+. statastates, name(state)
+(50 real changes made)
+(variable state_name was str14, now str20 to accommodate using data's values)
+
+    Result                      Number of obs
+    -----------------------------------------
+    Not matched                             1
+        from master                         0  (_merge==1)
+        from using                          1  (_merge==2)
+
+    Matched                                50  (_merge==3)
+    -----------------------------------------
+
+. drop if state_fips == .
+(0 observations deleted)
+
+. merge 1:1 state_fips using `population', keep(match master) nogen
+
+    Result                      Number of obs
+    -----------------------------------------
+    Not matched                             0
+    Matched                                51  
+    -----------------------------------------
+
+. replace crf_allocation = 495138063.60 if state == "DISTRICT OF COLUMBIA"
+(1 real change made)
+
+. gen crf_allocation_percapita = crf_allocation/popestimate2019
+
+. keep state_fips state crf_allocation* popestimate2019 
+
+. gen crf_rule = "Fixed Allocation" if crf_allocation <= 1250000000
+(29 missing values generated)
+
+. replace crf_rule = "Variable Allocation" if crf_allocation > 1250000000
+variable crf_rule was str16 now str19
+(29 real changes made)
+
+. tempfile crf_allocation
+
+. save `crf_allocation', replace 
+(file /var/folders/vz/nb4bfqj162nf95qr4tqrffgr0000gn/T//S_55156.000002 not found)
+file /var/folders/vz/nb4bfqj162nf95qr4tqrffgr0000gn/T//S_55156.000002 saved as .dta format
+
+. 
+. /// Total Allocations 
+> import excel "${raw}/FFIS_COVID_19_State_by_State_Allocations.20.xlsx", sheet("clean_allocations") firstrow clear 
+(85 vars, 70 obs)
+
+. statastates, name(State)
+(67 real changes made)
+
+    Result                      Number of obs
+    -----------------------------------------
+    Not matched                            19
+        from master                        19  (_merge==1)
+        from using                          0  (_merge==2)
+
+    Matched                                51  (_merge==3)
+    -----------------------------------------
+
+. drop if state_fips == . 
+(19 observations deleted)
+
+. 
+. /// Create Allocation Variables 
+> rename (State CoronavirusReliefFund TOTAL) (state crf total)
+
+. keep state total state_abbrev
+
+. merge 1:1 state using `crf_allocation', keep(match master) nogen
+
+    Result                      Number of obs
+    -----------------------------------------
+    Not matched                             0
+    Matched                                51  
+    -----------------------------------------
+
+. destring total, replace
+total: all characters numeric; replaced as double
+
+. replace total = total*1000
+(51 real changes made)
+
+. /// create some variables 
+> gen total_percapita = total/popestimate2019
+
+. gen crf_percapita = crf_allocation/popestimate2019
+
+. gen crf_billions = crf_allocation/1000000000
+
+. gen pop_millions = popestimate2019/1000000
+
+. 
+. //// Rule: Total Funding Provided Per Capita 
+> cumul total_percapita, gen(total_percapita_ecfd)
+
+. sort total_percapita_ecfd
+
+. 
+. gen fedsupport_categories = ""
+(51 missing values generated)
+
+. replace fedsupport_categories = "p0-p50" if   total_percapita_ecfd <= 0.50
+variable fedsupport_categories was str1 now str6
+(25 real changes made)
+
+. replace fedsupport_categories = "p51-p100" if  total_percapita_ecfd > 0.50 
+variable fedsupport_categories was str6 now str8
+(26 real changes made)
+
+. 
+. /// Extra: CRF Rule 
+> /*
+> cap drop fedsupport_categories
+> cumul crf_percapita, gen(crf_percapita_ecfd)
+> sort crf_percapita_ecfd
+> 
+> gen fedsupport_categories = ""
+> replace fedsupport_categories = "p0-p50" if   crf_percapita_ecfd <= 0.50
+> replace fedsupport_categories = "p51-p100" if  crf_percapita_ecfd > 0.50 
+> */
+. 
+. 
+. save "${tem}/states_funding_distribution.dta",replace 
+file 1_Data/Temp//states_funding_distribution.dta saved
+
+. 
+. keep state_abbrev fedsupport_categories
+
+. rename state_abbrev StateCode
+
+. sort StateCode
+
+. save "${tem}/cares_rankings.dta",replace 
+file 1_Data/Temp//cares_rankings.dta saved
+
+. 
+. 
+. 
+. 
+. 
+. 
+end of do-file
+
+. /// 1) Clean Bloomberg State Bond Data and Merge it with MSRB data 
+> do "${cod}/code_dataprep/1_Clean_State_Bonds_Bloomberg_MSRB.do"
+
+. ********************************************************************************
+. ********************************************************************************
+. *** Project: Volatility in the Municipal Bond Market and the MLF 
+. *** Authors: Felipe Lozano & Luis Navarro 
+. *** Code by: Luis Navarro 
+. *** Script: Clean Bloomberg State Data and Merge with MSRB Secondary Market
+. *** This Update: February 2024
+. ********************************************************************************
+. ********************************************************************************
+. /// Bloomberg Primary Market Bonds
+> /// All Bonds (Active and Matured) issued by State Governments between 2019 and 2021
+> 
+. forvalues i=1(1)2{
+  2. import excel "${raw}/state_bonds_bloomberg.xlsx", sheet("Sheet`i'") firstrow clear
+  3. tempfile statebonds`i'
+  4. save `statebonds`i'', replace 
+  5. }
+(20 vars, 4,864 obs)
+(file /var/folders/vz/nb4bfqj162nf95qr4tqrffgr0000gn/T//S_55156.000001 not found)
+file /var/folders/vz/nb4bfqj162nf95qr4tqrffgr0000gn/T//S_55156.000001 saved as .dta format
+(20 vars, 4,409 obs)
+(file /var/folders/vz/nb4bfqj162nf95qr4tqrffgr0000gn/T//S_55156.000002 not found)
+file /var/folders/vz/nb4bfqj162nf95qr4tqrffgr0000gn/T//S_55156.000002 saved as .dta format
+
+. 
+. use `statebonds1', clear
+
+. append using `statebonds2'
+(variable BondPurpose was str64, now str65 to accommodate using data's values)
+
+. ********************************************************************************
+. /// Do the credit rating analysis here 
+> // https://financestu.com/sp-vs-moodys-vs-fitch/
+. // https://www.moneyland.ch/en/rating-agencies
+. // https://www.moodys.com/sites/products/productattachments/ap075378_1_1408_ki.pdf
+. 
+. /// Standardize Credit Ratings 
+> /// replaces NAs with empty cells 
+> replace SPInitRtg = "" if SPInitRtg == "#N/A N/A"
+(1,374 real changes made)
+
+. replace MdyInitRtg = "" if MdyInitRtg == "#N/A N/A"
+(1,236 real changes made)
+
+. replace FitchInitRtg = "" if FitchInitRtg == "#N/A N/A"
+(3,195 real changes made)
+
+. 
+. /*
+> 
+> *** Standard and Poors 
+> generate StandardPoors = .
+> replace StandardPoors = 1 if SPInitRtg == "AAA"
+> replace StandardPoors = 2 if SPInitRtg == "AA+"
+> replace StandardPoors = 3 if SPInitRtg == "AA"
+> replace StandardPoors = 4 if SPInitRtg == "AA-"
+> replace StandardPoors = 5 if SPInitRtg == "A+"
+> replace StandardPoors = 6 if SPInitRtg == "A"
+> replace StandardPoors = 7 if SPInitRtg == "A-"
+> replace StandardPoors = 8 if SPInitRtg == "BBB+"
+> replace StandardPoors = 9 if SPInitRtg == "BBB"
+> replace StandardPoors = 10 if SPInitRtg == "BBB-"
+> 
+> **** Fitch
+> generate Fitch = .
+> replace Fitch = 1 if FitchInitRtg == "AAA"
+> replace Fitch = 2 if FitchInitRtg == "AA+"
+> replace Fitch = 3 if FitchInitRtg == "AA"
+> replace Fitch = 4 if FitchInitRtg == "AA-"
+> replace Fitch = 5 if FitchInitRtg == "A+"
+> replace Fitch = 6 if FitchInitRtg == "A"
+> replace Fitch = 7 if FitchInitRtg == "A-"
+> replace Fitch = 8 if FitchInitRtg == "BBB+"
+> replace Fitch = 9 if FitchInitRtg == "BBB"
+> replace Fitch = 10 if FitchInitRtg == "BBB-"
+> 
+> 
+> **** Moodys
+> generate Moodys = .
+> replace Moodys = 1 if MdyInitRtg == "Aaa"
+> replace Moodys = 2 if MdyInitRtg == "Aa1"
+> replace Moodys = 3 if MdyInitRtg == "Aa2"
+> replace Moodys = 4 if MdyInitRtg == "Aa3"
+> replace Moodys = 5 if MdyInitRtg == "A1"
+> replace Moodys = 6 if MdyInitRtg == "A2"
+> replace Moodys = 7 if MdyInitRtg == "A3"
+> replace Moodys = 8 if MdyInitRtg == "Baa1"
+> replace Moodys = 9 if MdyInitRtg == "Baa2"
+> replace Moodys = 10 if MdyInitRtg == "Baa3"
+> 
+> */
+. 
+. /// Create Rating Variables 
+> generate StandardPoors = .
+(9,273 missing values generated)
+
+. replace  StandardPoors = 1  if SPInitRtg == "AAA" | SPInitRtg == "SP-1+" | SPInitRtg == "AAA/A-1+"
+(1,647 real changes made)
+
+. replace  StandardPoors = 2  if SPInitRtg == "AA+" | SPInitRtg == "AA+/A-1" | SPInitRtg == "AA+/A-1+"
+(2,435 real changes made)
+
+. replace  StandardPoors = 3  if SPInitRtg == "AA" | SPInitRtg == "SP-1" | SPInitRtg == "AA/A-1" | SPInitRtg == "AA/A-1+"
+(1,707 real changes made)
+
+. replace  StandardPoors = 4  if SPInitRtg == "AA-"
+(870 real changes made)
+
+. replace  StandardPoors = 5  if SPInitRtg == "A+"
+(384 real changes made)
+
+. replace  StandardPoors = 6  if SPInitRtg == "A" | SPInitRtg == "SP-2" | SPInitRtg == "A/A-1" 
+(320 real changes made)
+
+. replace  StandardPoors = 7  if SPInitRtg == "A-"
+(118 real changes made)
+
+. replace  StandardPoors = 8  if SPInitRtg == "BBB+"
+(81 real changes made)
+
+. replace  StandardPoors = 9  if SPInitRtg == "BBB" | SPInitRtg == "SP-3"
+(95 real changes made)
+
+. replace  StandardPoors = 10 if SPInitRtg == "BBB-" | SPInitRtg == "BB+" | SPInitRtg == "BB" | SPInitRtg == "BB-" | SPInitRtg == "B"
+(225 real changes made)
+
+. replace  StandardPoors = 11 if StandardPoors == . 
+(1,391 real changes made)
+
+. 
+. // https://www.bonddesk.com/moodys.html#:~:text=There%20are%20four%20rating%20categories,speculative%20quality%20are%20designated%20SG.
+. ** Moody's 
+. generate Moodys = .
+(9,273 missing values generated)
+
+. replace  Moodys = 1  if MdyInitRtg == "Aaa" | MdyInitRtg == "MIG1" | MdyInitRtg == "VMIG1" | MdyInitRtg == "Aaa/VMIG1"
+(2,029 real changes made)
+
+. replace  Moodys = 2  if MdyInitRtg == "Aa3"
+(522 real changes made)
+
+. replace  Moodys = 3  if MdyInitRtg == "Aa2" | MdyInitRtg == "MIG2" | MdyInitRtg == "Aa2/VMIG1" 
+(1,678 real changes made)
+
+. replace  Moodys = 4  if MdyInitRtg == "Aa1" | MdyInitRtg == "Aa1/VMIG1"
+(2,646 real changes made)
+
+. replace  Moodys = 5  if MdyInitRtg == "A3"
+(88 real changes made)
+
+. replace  Moodys = 6  if MdyInitRtg == "A2" | MdyInitRtg == "MIG3" | MdyInitRtg == "VMIG3"
+(261 real changes made)
+
+. replace  Moodys = 7  if MdyInitRtg == "A1" 
+(461 real changes made)
+
+. replace  Moodys = 8  if MdyInitRtg == "Baa3"
+(195 real changes made)
+
+. replace  Moodys = 9  if MdyInitRtg == "Baa2" | MdyInitRtg == "SG"
+(20 real changes made)
+
+. replace  Moodys = 10 if MdyInitRtg == "Baa1" | MdyInitRtg == "MIG4" | MdyInitRtg == "VMIG4"
+(93 real changes made)
+
+. replace  Moodys = 11 if Moodys == . 
+(1,280 real changes made)
+
+. 
+. **** Fitch
+. /// https://www.fitchratings.com/products/rating-definitions#about-rating-definitions
+> generate Fitch = .
+(9,273 missing values generated)
+
+. replace  Fitch = 1  if FitchInitRtg == "AAA" | FitchInitRtg == "F1+" 
+(1,383 real changes made)
+
+. replace  Fitch = 2  if FitchInitRtg == "AA+" | FitchInitRtg == "AA+/F1+"
+(2,566 real changes made)
+
+. replace  Fitch = 3  if FitchInitRtg == "AA" | FitchInitRtg == "AA/F1+" | FitchInitRtg == "F1"
+(1,155 real changes made)
+
+. replace  Fitch = 4  if FitchInitRtg == "AA-" 
+(327 real changes made)
+
+. replace  Fitch = 5  if FitchInitRtg == "A+"
+(267 real changes made)
+
+. replace  Fitch = 6  if FitchInitRtg == "A" | FitchInitRtg == "F2" | FitchInitRtg == "A(EXP)"
+(75 real changes made)
+
+. replace  Fitch = 7  if FitchInitRtg == "A-"
+(48 real changes made)
+
+. replace  Fitch = 8  if FitchInitRtg == "BBB+"
+(17 real changes made)
+
+. replace  Fitch = 9  if FitchInitRtg == "BBB" | FitchInitRtg == "F3"
+(118 real changes made)
+
+. replace  Fitch = 10 if FitchInitRtg == "BBB-"
+(114 real changes made)
+
+. replace  Fitch = 11 if Fitch == . 
+(3,203 real changes made)
+
+. 
+. 
+. /// Create rating variable: max of the three ratings. since the rating are coded such 
+> /// that a largest number is a lowest rating, taking the max means we are considering the lowest 
+> /// rating assigned by any of these agencies 
+> gsort -StandardPoors -Moodys -Fitch
+
+. generate rating = .
+(9,273 missing values generated)
+
+. /// when two are missing, assign the one we know 
+> replace rating = StandardPoors if Moodys == 11 & Fitch == 11
+(1,066 real changes made)
+
+. replace rating = Moodys if StandardPoors == 11 & Fitch == 11
+(749 real changes made)
+
+. replace rating = Fitch if StandardPoors == 11 & Moodys == 11
+(79 real changes made)
+
+. //// when one is missing, take the average of the ones we have 
+> replace rating = max(StandardPoors, Moodys) if Fitch == 11 & !(StandardPoors == 11 | Moodys == 11)
+(1,388 real changes made)
+
+. replace rating = max(StandardPoors, Fitch) if Moodys == 11 & !(StandardPoors == 11 | Fitch == 11)
+(135 real changes made)
+
+. replace rating = max(Moodys, Fitch) if StandardPoors == 11 & !(Moodys == 11 | Fitch == 11)
+(267 real changes made)
+
+. 
+. replace rating = max(StandardPoors, Moodys, Fitch) if !(StandardPoors == 11 | Moodys == 11 | Fitch == 11)
+(5,589 real changes made)
+
+. 
+. 
+. 
+. /// Aggregated Rating Measure 
+> gen rating_agg = 5 
+
+. /// AAA = 1
+> replace rating_agg = 1 if rating == 1
+(1,446 real changes made)
+
+. /// AA = 2, 3, 4
+> replace rating_agg = 2 if rating == 2 | rating == 3 |rating == 4
+(5,633 real changes made)
+
+. /// A = 5, 6, 7
+> replace rating_agg = 3 if rating == 5 | rating == 6 |rating == 7
+(1,271 real changes made)
+
+. /// BBB = 8, 9, 10 
+> replace rating_agg = 4 if rating == 8 | rating == 9 |rating == 10
+(627 real changes made)
+
+. label define rating_agg  1 "AAA" 2 "AA" 3 "A" 4 "BBB" 5 "NR"
+
+. label values rating_agg rating_agg
+
+. /// Express in strings 
+> gen rating_agg_str = ""
+(9,273 missing values generated)
+
+. replace rating_agg_str = "AAA" if rating_agg == 1
+variable rating_agg_str was str1 now str3
+(1,446 real changes made)
+
+. replace rating_agg_str = "AA" if rating_agg == 2
+(5,633 real changes made)
+
+. replace rating_agg_str = "A" if rating_agg == 3
+(1,271 real changes made)
+
+. replace rating_agg_str = "BBB" if rating_agg == 4
+(627 real changes made)
+
+. replace rating_agg_str = "NR" if rating_agg == 5
+(296 real changes made)
+
+. ********************************************************************************
+. /// Filtering Assumptions 
+> /// Exclude Puerto Rico and Guam 
+> drop if StateCode == "PR" | StateCode == "GU" 
+(29 observations deleted)
+
+. /// Exclude Not Rated Bonds 
+> drop if rating_agg_str == "NR"
+(268 observations deleted)
+
+. ********************************************************************************
+. /// Save the bonds here 
+> tempfile statebondscomplete
+
+. save `statebondscomplete' ,replace 
+(file /var/folders/vz/nb4bfqj162nf95qr4tqrffgr0000gn/T//S_55156.000003 not found)
+file /var/folders/vz/nb4bfqj162nf95qr4tqrffgr0000gn/T//S_55156.000003 saved as .dta format
+
+. ********************************************************************************
+. ********************************************************************************
+. /// Data for the Ratings Map 
+> use `statebondscomplete',clear 
+
+. keep rating_agg StateCode IssueDate
+
+. gen year = year(IssueDate)
+
+. keep if year == 2019
+(5,853 observations deleted)
+
+. gcollapse (mean) rating_agg, by(StateCode)
+
+. replace rating_agg = round(rating_agg)
+(16 real changes made)
+
+. sort rating_agg StateCode
+
+. duplicates drop StateCode, force 
+
+Duplicates in terms of StateCode
+
+(0 observations are duplicates)
+
+. statastates, abbreviation(StateCode)
+(0 real changes made)
+
+    Result                      Number of obs
+    -----------------------------------------
+    Not matched                            13
+        from master                         0  (_merge==1)
+        from using                         13  (_merge==2)
+
+    Matched                                38  (_merge==3)
+    -----------------------------------------
+
+. replace rating_agg = 5 if rating_agg == .
+(13 real changes made)
+
+. drop _merge
+
+. save "${tem}/state_ratings_data.dta", replace 
+file 1_Data/Temp//state_ratings_data.dta saved
+
+. 
+. *******************************************************************************
+. //// Secondary Market Bonds 
+> /// Import data from the full market and then match on the cusips. 
+> use "${raw}/msrb_states1921.dta", clear 
+
+. merge m:1 CUSIP using `statebondscomplete', keep(match) nogen 
+(variable CUSIP was str10, now str17 to accommodate using data's values)
+
+    Result                      Number of obs
+    -----------------------------------------
+    Not matched                             0
+    Matched                           474,004  
+    -----------------------------------------
+
+. destring PAR_TRADED, replace 
+PAR_TRADED: all characters numeric; replaced as long
+
+. /// Export data for the analysis 
+> save "${tem}/statebondsfull_secondary.dta",replace 
+file 1_Data/Temp//statebondsfull_secondary.dta saved
+
+. ********************************************************************************
+. /// Keep Only CUSIPs
+> keep CUSIP 
+
+. duplicates drop CUSIP, force 
+
+Duplicates in terms of CUSIP
+--Break--
+r(1);
+
+end of do-file
+--Break--
+r(1);
+
+end of do-file
+
+--Break--
+r(1);
+
+. do "/var/folders/vz/nb4bfqj162nf95qr4tqrffgr0000gn/T//SD55156.000000"
+
+. timer off 5
+
+. timer list 5
+
+. timer clear 5 
+
+. cap log close           

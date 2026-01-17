@@ -1,0 +1,50 @@
+\documentclass{article}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage[margin=1in]{geometry}
+\usepackage{siunitx}
+\begin{document}
+
+\begin{table}[tbp] \centering
+\newcolumntype{R}{>{\raggedleft\arraybackslash}X}
+\newcolumntype{L}{>{\raggedright\arraybackslash}X}
+\newcolumntype{C}{>{\centering\arraybackslash}X}
+
+\begin{tabularx}{\linewidth}{@{}lSSSS@{}}
+
+\toprule
+{Results}&{AAA}&{AA}&{A}&{BBB} \tabularnewline
+\midrule \addlinespace[\belowrulesep]
+{Weighted Yield}&{-0.1147**}&{-0.0443*}&{-0.1118**}&0.2292 \tabularnewline
+{}&{(0.0592)}&{(0.0499)}&{(0.0575)}&{(0.1568)} \tabularnewline
+{ATE, % Excess Volatility}&{44.3950\%}&{20.8115\%}&{45.1435\%}&{133.3021\%} \tabularnewline
+{RMSPE}&0.0023&0.0024&0.0034&0.0649 \tabularnewline
+{Bond Spreads}&{-0.1355***}&{-0.1897***}&{-0.1091**}&0.0534 \tabularnewline
+{}&{(0.0487)}&{(0.0559)}&{(0.0452)}&{(0.0785)} \tabularnewline
+{ATE, % Excess Volatility}&{47.6246\%}&{60.1284\%}&{40.3608\%}&{116.1098\%} \tabularnewline
+{RMSPE}&0.0005&0.0050&0.0001&0.0247 \tabularnewline
+{Residualized Yield}&{-0.1051**}&{-0.0831**}&{-0.1293***}&0.2759 \tabularnewline
+{}&{(0.0421)}&{(0.0487)}&{(0.0452)}&{(0.0706)} \tabularnewline
+{ATE, % Excess Volatility}&{45.7089\%}&{31.5500\%}&{50.8584\%}&{201.6695\%} \tabularnewline
+{RMSPE}&0.0012&0.0039&0.0004&0.0180 \tabularnewline
+{Weighted Residualized Spread}&{-0.1969***}&-0.0199&{-0.1119**}&0.2133 \tabularnewline
+{}&{(0.0598)}&{(0.0464)}&{(0.0603)}&{(0.1519)} \tabularnewline
+{ATE, % Excess Volatility}&{59.5625\%}&{8.3484\%}&{36.4918\%}&{NA} \tabularnewline
+{RMSPE}&0.0008&0.0009&0.0016&0.0533 \tabularnewline
+{Excluding Municipal Donors}&{-0.2154***}&{-0.1558***}&{-0.2173***}&0.1044 \tabularnewline
+{}&{(0.0886)}&{(0.0902)}&{(0.0837)}&{(0.1508)} \tabularnewline
+{ATE, % Excess Volatility}&{81.3452\%}&{57.1749\%}&{82.1125\%}&{NA} \tabularnewline
+{RMSPE}&0.0012&0.0042&0.0006&0.0252 \tabularnewline
+{Excluding Chile}&{-0.1792***}&{-0.1914***}&{-0.0696**}&0.0739 \tabularnewline
+{}&{(0.0466)}&{(0.0475)}&{(0.0441)}&{(0.0794)} \tabularnewline
+{ATE, % Excess Volatility}&{67.6958\%}&{70.2456\%}&{26.2787\%}&{NA} \tabularnewline
+{RMSPE}&0.0048&0.0048&0.0006&0.0279 \tabularnewline
+{Excluding Jamaica}&{-0.0484*}&-0.0181&{-0.0706**}&0.1910 \tabularnewline
+{}&{(0.0466)}&{(0.0475)}&{(0.0441)}&{(0.0794)} \tabularnewline
+{ATE, % Excess Volatility}&{18.2642\%}&{6.6432\%}&{26.6875\%}&{NA} \tabularnewline
+{RMSPE}&0.0011&0.0023&0.0004&0.0350 \tabularnewline
+\bottomrule 
+
+\end{tabularx}
+\end{table}
+\end{document}

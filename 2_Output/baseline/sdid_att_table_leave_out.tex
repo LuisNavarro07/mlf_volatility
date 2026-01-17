@@ -1,0 +1,25 @@
+\documentclass{article}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage[margin=1in]{geometry}
+\begin{document}
+
+\begin{table}[tbp] \centering
+\newcolumntype{R}{>{\raggedleft\arraybackslash}X}
+\newcolumntype{L}{>{\raggedright\arraybackslash}X}
+\newcolumntype{C}{>{\centering\arraybackslash}X}
+
+\begin{tabularx}{\linewidth}{@{}lCCCCCCCCC@{}}
+
+\toprule
+{rating}&{Baseline}&{Mean}&{SD}&{P01}&{P05}&{P10}&{P90}&{P95}&{P99} \tabularnewline
+\midrule \addlinespace[\belowrulesep]
+AAA&--0.2118***&--0.2108&0.0117&--0.2172&--0.2146&--0.2136&--0.2103&--0.2077&--0.1910 \tabularnewline
+AA&--0.0957*&--0.0955&0.0065&--0.1087&--0.0993&--0.0981&--0.0940&--0.0911&--0.0681 \tabularnewline
+A&--0.1147**&--0.1142&0.0027&--0.1183&--0.1169&--0.1160&--0.1123&--0.1109&--0.1035 \tabularnewline
+BBB&--0.1602*&--0.1588&0.0214&--0.1838&--0.1699&--0.1648&--0.1586&--0.1559&--0.1332 \tabularnewline
+\bottomrule 
+
+\end{tabularx}
+\end{table}
+\end{document}

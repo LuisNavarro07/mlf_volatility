@@ -1,0 +1,2684 @@
+
+. 
+. 
+. *-------------------------------------------------------------------------------
+. /// 1. Only Muni Bonds
+> *-------------------------------------------------------------------------------
+. qui use "${cln}/synth_clean_fixedcr.dta", clear 
+
+. qui drop if month_exp <= 3
+
+. qui keep if depvar == "Nominal Yield Baseline" | depvar == "Donors"
+
+. tab asset_class
+
+       asset_class |      Freq.     Percent        Cum.
+-------------------+-----------------------------------
+         Commodity |        759       10.85       10.85
+   Municipal Bonds |      4,224       60.38       71.23
+           Outcome |        132        1.89       73.11
+    Sovereign Bond |        825       11.79       84.91
+Stock Market Index |      1,056       15.09      100.00
+-------------------+-----------------------------------
+             Total |      6,996      100.00
+
+. 
+. *-----------------------------------------------
+. keep if asset_class == "Outcome" | asset_class == "Municipal Bonds"
+(2,640 observations deleted)
+
+. *------------------------------------------------
+. 
+. * Estimation 
+. qui synth_leave_one
+variable id not found
+r(111);
+
+end of do-file
+
+r(111);
+
+. do "/var/folders/b4/3s0qswvn4hb39bgrmwz7606r0000gp/T//SD38741.000000"
+
+. 
+. /// Define program that peforms all the analysis 
+> cap program drop synth_leave_one
+
+. program define synth_leave_one, rclass 
+  1. 
+. graph drop _all 
+  2. /// Step 1. Synth Estimation 
+> qui drop if month_exp <= 3
+  3. tempfile dataset 
+  4. save `dataset', replace 
+  5. 
+. /// Run the synthetic control estimator 
+> synth_estimation
+  6. qui tempfile synth_treated
+  7. qui save `synth_treated', replace 
+  8. save "${oup}/synth_treated_temp.dta", replace 
+  9. 
+. *-------------------------------------------------------------------------------
+. /// Step 2. Donor Weight Plot 
+> qui local title1 = "Donor Weights - A"
+ 10. qui local title2 = "Donor Weights - AA"
+ 11. qui local title3 = "Donor Weights - AAA"
+ 12. qui local title4 = "Donor Weights - BBB"
+ 13. 
+. forvalues i = 1(1)4{
+ 14. 
+. qui use "${tem}/scm_weight_`i'.dta", clear 
+ 15. qui drop if weight == 0
+ 16. qui label variable weight "Donor Weights"
+ 17. qui tempfile donor_weight_`i'
+ 18. qui save `donor_weight_`i'', replace 
+ 19. }
+ 20. 
+. use `donor_weight_1', clear 
+ 21. forvalues i = 2(1)4{
+ 22.         qui append using `donor_weight_`i''
+ 23. }
+ 24. qui merge m:1 id using "${tem}/varnames.dta", keep(match master) nogen 
+ 25. qui save "${oup}/weights_results_temp.dta", replace 
+ 26. 
+. /// Step 4. Express placebos in units of the treated series 
+> use `dataset', clear 
+ 27. placebo_outcome_main
+ 28. tempfile synth_placebos
+ 29. save `synth_placebos', replace 
+ 30. *-------------------------------------------------------------------------------
+. 
+. 
+. /// Step 5. Identify the placebos that pass the cohen-d criterion 
+> qui use `synth_placebos', clear 
+ 31. qui merge m:1 id using "${tem}/placebosforinferencerce_main.dta", keep(match master) nogen
+ 32. qui tab survival
+ 33. qui keep if survival == 1
+ 34. /// Save data 
+> qui tempfile placeboempiricaldistribution
+ 35. qui save `placeboempiricaldistribution', replace 
+ 36. 
+. 
+. /// Step 6. Compute ATE Tables 
+> qui use `synth_treated', clear 
+ 37. *use "${tem}/synth_treated.dta", clear 
+. qui tab fileid
+ 38. global cols = r(r)
+ 39. 
+. local title1 = "A"
+ 40. local title2 = "AA"
+ 41. local title3 = "AAA"
+ 42. local title4 = "BBB"
+ 43. /// Matrix to store results 
+> matrix define R=J(12,$cols,.)
+ 44. matrix colnames R = "A" "AA" "AAA" "BBB"
+ 45. matrix rownames R = "ate" "se" "ci_min" "ci_max"  "pval2" "pval1" "vol_pre" "vol_treat" "excess_vol" "ate_excess_vol" "rmspe" "id"
+ 46. matlist R 
+ 47. 
+. /// Loop to compute the ATE for each treated unit 
+> forvalues j = 1(1)$cols { 
+ 48.         //// 1.- Store All Treated Unit Characteristics 
+> 
+.         qui use `synth_treated', clear
+ 49.         qui egen group = group(id fileid)
+ 50.         qui drop ate tr_eff
+ 51.         /// Estimate Treatment Effect Using Treated and Synthetic Series 
+>         bysort group: gen tr_eff = treat_lev - synth_lev
+ 52.         bysort group: egen ate = mean(tr_eff) if month_exp >=0 & month_exp <= ${tr_eff_window}
+ 53.         /// Pre-Measures in Volatility 
+>         /// Keep only instrument `j' and donors 
+>         qui keep if fileid == `j'
+ 54.         /// Average Treatment Effect 
+>         qui sum ate 
+ 55.         global ate = r(mean)
+ 56.         mat R[1,`j'] = $ate
+ 57.         /// ATE in absolute value (to compute ATE in percent of Excess Volatility)
+>         local absate = abs($ate)
+ 58.         /// Volatility Pre-Treatment Period: Average Volatility Observed in the Pre-Treatment Period 
+>         qui sum treat_lev if month_exp < -1
+ 59.         local vol_pre = r(mean)
+ 60.         mat R[7,`j'] = `vol_pre'
+ 61.         /// Volatility Observed in March 2020: Spike due to COVID 
+>         qui sum treat_lev if month_exp == -1
+ 62.         local vol_treat = r(mean)
+ 63.         mat R[8,`j'] = `vol_treat'
+ 64.         /// Compute Excess Volatility: Difference in Average Volatility and Volatility During the Pandemic 
+>         local excess_vol = `vol_treat' - `vol_pre'
+ 65.         mat R[9,`j'] = `excess_vol'
+ 66.         /// ATE in Terms of Excess Volatility 
+>         local ate_excess_vol = 100*(`absate'/`excess_vol')
+ 67.         if abs(`ate_excess_vol') > 300 {
+ 68.     local ate_excess_vol = "."
+ 69.         }
+ 70.         mat R[10,`j'] = `ate_excess_vol'
+ 71.         /// RMSE 
+>         qui sum rmse 
+ 72.         mat R[11,`j'] = r(mean)
+ 73.         /// Id
+>         qui sum id 
+ 74.         mat R[12,`j'] = r(mean)
+ 75. 
+.         
+.         /// 2.- Count How Many times the ATE for the treated unit exceeds the ATE at the placebo empirical distribution 
+>         *preserve 
+.         qui use "${tem}/placeboempiricaldistribution_main.dta" , clear 
+ 76.         /// Estimate the Average Treatment Effect for the specific window 
+>         qui egen group = group(id fileid)
+ 77.         qui drop ate
+ 78.         /// Average Treatment Effect estimated over the 
+>         bysort group: egen ate = mean(tr_eff) if month_exp >=0 & month_exp <= ${tr_eff_window}
+ 79.         qui gcollapse (mean) ate, by(id fileid group)
+ 80.         /// keep only the empirical distribution of state j
+>         qui keep if fileid == `j'
+ 81.         /// Standard Error 
+>         qui sum ate 
+ 82.         local se = r(sd)
+ 83.         mat R[2,`j'] = `se'
+ 84.         /// Hypothesis Testing and P Values 
+>         qui cumul ate, gen(cdf)
+ 85.         qui gsort cdf
+ 86.         /// Hypothesis Testing and P Values 
+>         _pctile ate, percentiles(2.5 97.5)
+ 87.         mat R[3,`j'] = r(r1)
+ 88.         mat R[4,`j'] = r(r2)
+ 89.         /// Cavallo Permutation Test Approach: Left-sided one-tail test. 
+>         /// Hypothesis: negative coefficient, hence the left-test. 
+>         /// Left-sided test: count how many times the placebos are more negative than the treatment effect. 
+>         /// (Inutition: p-val = 0 implies the ATE is more negative than all the placebos, ie: is smaller in all cases). 
+>         /// The p-value is the number of time the ATE is larger than the placebo estimates. 
+>         qui gen pcount = ate < $ate 
+ 90.         /// p-value 
+>         qui sum pcount 
+ 91.     local pval1 = round(r(mean),0.001)
+ 92.         mat R[5,`j'] = `pval1'
+ 93.         
+.         /// Two Tail Test 
+>         qui drop pcount 
+ 94.         qui gen atetreat = abs($ate)
+ 95.         qui gen absate = abs(ate)
+ 96.         /// count how many times the 
+>         qui gen pcount = absate < atetreat
+ 97.         qui sum pcount
+ 98.         local pval2= round(r(mean),0.001)
+ 99.         mat R[6,`j'] = `pval2'
+100.         
+.         
+. }
+101. 
+. * End program 
+. end 
+
+. 
+. 
+. *-------------------------------------------------------------------------------
+. cap program drop leave_one_out_loop
+
+. program define leave_one_out_loop, rclass 
+  1. qui levelsof id if data != "Outcome", local(donors)
+  2. 
+. local j = 1
+  3. foreach x of local donors {
+  4.         dis `j'
+  5.         preserve 
+  6.         /// Leave one donor out
+>         qui drop if id == `x'
+  7.         
+.         /// Estimate the synth 
+>         qui synth_leave_one
+  8.         
+.         /// Save results 
+>         preserve
+  9.         qui gen leave_id = `x'
+ 10.         qui save "${oup}/ate_loa_`j'.dta", replace 
+ 11.         restore 
+ 12.         
+.         preserve 
+ 13.         qui ate_table 
+ 14.         qui save "${oup}/ate_table_`j'.dta", replace 
+ 15.         restore 
+ 16.         
+.         /// Save treatment effects  
+>         qui use "${oup}/synth_treated_temp.dta", clear 
+ 17.         qui gen leave_id = `x'
+ 18.         qui save "${oup}/synth_treated_`j'.dta", replace 
+ 19.         
+.         /// Save weights 
+>         qui use "${oup}/weights_results_temp.dta", clear 
+ 20.         qui gen leave_id = `x'
+ 21.         qui save "${oup}/weight_loa_`j'.dta", replace 
+ 22.         restore 
+ 23.         local j = `j' + 1
+ 24.         
+. }
+ 25. 
+. 
+. end 
+
+. *-------------------------------------------------------------------------------
+. 
+. *-------------------------------------------------------------------------------
+. 
+end of do-file
+
+. do "/var/folders/b4/3s0qswvn4hb39bgrmwz7606r0000gp/T//SD38741.000000"
+
+. 
+. *********************************************************************************
+. * Analysis by Asset Classes 
+. 
+. /// Asset Classes 
+> global oup "2_Output/asset_classes"
+
+. cap log close, replace 
+
+. cap log using "${oup}/asset_classes.log"
+
+. 
+. 
+. *-------------------------------------------------------------------------------
+. /// 1. Only Muni Bonds
+> *-------------------------------------------------------------------------------
+. qui use "${cln}/synth_clean_fixedcr.dta", clear 
+
+. qui drop if month_exp <= 3
+
+. qui keep if depvar == "Nominal Yield Baseline" | depvar == "Donors"
+
+. tab asset_class
+
+       asset_class |      Freq.     Percent        Cum.
+-------------------+-----------------------------------
+         Commodity |        759       10.85       10.85
+   Municipal Bonds |      4,224       60.38       71.23
+           Outcome |        132        1.89       73.11
+    Sovereign Bond |        825       11.79       84.91
+Stock Market Index |      1,056       15.09      100.00
+-------------------+-----------------------------------
+             Total |      6,996      100.00
+
+. 
+. *-----------------------------------------------
+. keep if asset_class == "Outcome" | asset_class == "Municipal Bonds"
+(2,640 observations deleted)
+
+. *------------------------------------------------
+. 
+. * Estimation 
+. qui synth_leave_one
+
+. 
+. 
+. /// Save results 
+> preserve 
+
+. qui ate_table 
+
+. list
+
+     +----------------------------------------------------------------------------------------------------------------+
+     |                            Results                AAA                 AA                  A                BBB |
+     |----------------------------------------------------------------------------------------------------------------|
+  1. |       Average Treatment Effect (a)           -0.0243*            -0.0150             0.0045             0.1439 |
+  2. |                                 SE           (0.0633)           (0.0731)           (0.0679)           (0.1060) |
+  3. |                      Conf Interval   (-0.1174,0.0820)   (-0.1356,0.0947)   (-0.1261,0.0880)   (-0.1966,0.1373) |
+  4. |            Historic Volatility (b)             0.2014             0.1539             0.1944             0.5084 |
+  5. |          Volatility March 2020 (c)             0.4661             0.4263             0.4591             0.5244 |
+     |----------------------------------------------------------------------------------------------------------------|
+  6. |      Excess Volatility (d = c - b)             0.2647             0.2724             0.2647             0.0160 |
+  7. | ATE, % Excess Volatility (e = d/a)           9.1705\%           5.5119\%           1.6888\%                 NA |
+  8. |                P-Value (Left Tail)             0.0970             0.1830             0.6800             0.9770 |
+  9. |                P-Value (Two Tails)             0.8000             0.6170             0.2860             0.9370 |
+ 10. |                              RMSPE             0.0422             0.0290             0.0389             0.2483 |
+     +----------------------------------------------------------------------------------------------------------------+
+
+. qui save "${oup}/ate_table_donors_munis.dta", replace 
+
+. restore 
+
+. 
+. /// Save treatment effects  
+> qui use "${oup}/synth_treated_temp.dta", clear 
+
+. qui save "${oup}/synth_treated_donors_munis.dta", replace 
+
+. 
+. /// Save weights 
+> qui use "${oup}/weights_results_temp.dta", clear 
+
+. qui save "${oup}/weights_donors_munis.dta", replace 
+
+. 
+. *-------------------------------------------------------------------------------
+. 
+. *-------------------------------------------------------------------------------
+. /// 2. Only Stock Market Index
+> *-------------------------------------------------------------------------------
+. qui use "${cln}/synth_clean_fixedcr.dta", clear 
+
+. qui drop if month_exp <= 3
+
+. qui keep if depvar == "Nominal Yield Baseline" | depvar == "Donors"
+
+. tab asset_class
+
+       asset_class |      Freq.     Percent        Cum.
+-------------------+-----------------------------------
+         Commodity |        759       10.85       10.85
+   Municipal Bonds |      4,224       60.38       71.23
+           Outcome |        132        1.89       73.11
+    Sovereign Bond |        825       11.79       84.91
+Stock Market Index |      1,056       15.09      100.00
+-------------------+-----------------------------------
+             Total |      6,996      100.00
+
+. 
+. *-----------------------------------------------
+. keep if asset_class == "Outcome" | asset_class == "Stock Market Index"
+(5,808 observations deleted)
+
+. *------------------------------------------------
+. 
+. * Estimation 
+. qui synth_leave_one
+
+. 
+. /// Save results 
+> preserve 
+
+. qui ate_table 
+
+. list
+
+     +----------------------------------------------------------------------------------------------------------------+
+     |                            Results                AAA                 AA                  A                BBB |
+     |----------------------------------------------------------------------------------------------------------------|
+  1. |       Average Treatment Effect (a)          -0.1080**          -0.0976**          -0.0746**             0.0015 |
+  2. |                                 SE           (0.0633)           (0.0731)           (0.0679)           (0.1060) |
+  3. |                      Conf Interval   (-0.1174,0.0820)   (-0.1356,0.0947)   (-0.1261,0.0880)   (-0.1966,0.1373) |
+  4. |            Historic Volatility (b)             0.2014             0.1539             0.1944             0.5084 |
+  5. |          Volatility March 2020 (c)             0.4661             0.4263             0.4591             0.5244 |
+     |----------------------------------------------------------------------------------------------------------------|
+  6. |      Excess Volatility (d = c - b)             0.2647             0.2724             0.2647             0.0160 |
+  7. | ATE, % Excess Volatility (e = d/a)          40.7792\%          35.8352\%          28.1798\%           9.1714\% |
+  8. |                P-Value (Left Tail)             0.0290             0.0400             0.0460             0.5710 |
+  9. |                P-Value (Two Tails)             0.9600             0.9370             0.9260             0.0630 |
+ 10. |                              RMSPE             0.6850             0.7547             0.6850             0.4209 |
+     +----------------------------------------------------------------------------------------------------------------+
+
+. qui save "${oup}/ate_table_donors_stocks.dta", replace 
+
+. restore 
+
+. 
+. /// Save treatment effects  
+> qui use "${oup}/synth_treated_temp.dta", clear 
+
+. qui save "${oup}/synth_treated_donors_stocks.dta", replace 
+
+. 
+. /// Save weights 
+> qui use "${oup}/weights_results_temp.dta", clear 
+
+. qui save "${oup}/weights_donors_stocks.dta", replace 
+
+. 
+. *-------------------------------------------------------------------------------
+.         
+. 
+. *-------------------------------------------------------------------------------
+. /// 3. Only Sovereign bonds
+> *-------------------------------------------------------------------------------
+. qui use "${cln}/synth_clean_fixedcr.dta", clear 
+
+. qui drop if month_exp <= 3
+
+. qui keep if depvar == "Nominal Yield Baseline" | depvar == "Donors"
+
+. tab asset_class
+
+       asset_class |      Freq.     Percent        Cum.
+-------------------+-----------------------------------
+         Commodity |        759       10.85       10.85
+   Municipal Bonds |      4,224       60.38       71.23
+           Outcome |        132        1.89       73.11
+    Sovereign Bond |        825       11.79       84.91
+Stock Market Index |      1,056       15.09      100.00
+-------------------+-----------------------------------
+             Total |      6,996      100.00
+
+. 
+. *-----------------------------------------------
+. keep if asset_class == "Outcome" | asset_class == "Sovereign Bond"
+(6,039 observations deleted)
+
+. *------------------------------------------------
+. 
+. * Estimation 
+. qui synth_leave_one
+variable id does not uniquely identify observations in the master data
+r(459);
+
+end of do-file
+
+r(459);
+
+. do "/var/folders/b4/3s0qswvn4hb39bgrmwz7606r0000gp/T//SD38741.000000"
+
+. qui use "${cln}/synth_clean_fixedcr.dta", clear 
+
+. qui drop if month_exp <= 3
+
+. qui keep if depvar == "Nominal Yield Baseline" | depvar == "Donors"
+
+. tab asset_class
+
+       asset_class |      Freq.     Percent        Cum.
+-------------------+-----------------------------------
+         Commodity |        759       10.85       10.85
+   Municipal Bonds |      4,224       60.38       71.23
+           Outcome |        132        1.89       73.11
+    Sovereign Bond |        825       11.79       84.91
+Stock Market Index |      1,056       15.09      100.00
+-------------------+-----------------------------------
+             Total |      6,996      100.00
+
+. 
+. *-----------------------------------------------
+. keep if asset_class == "Outcome" | asset_class == "Sovereign Bond"
+(6,039 observations deleted)
+
+. *------------------------------------------------
+. 
+end of do-file
+
+. synth_estimation
+v_pre_mn:  (609 real changes made)
+v_pre_sd:  (609 real changes made)
+
+  group(id) |      Freq.     Percent        Cum.
+------------+-----------------------------------
+          1 |         33       25.00       25.00
+          2 |         33       25.00       50.00
+          3 |         33       25.00       75.00
+          4 |         33       25.00      100.00
+------------+-----------------------------------
+      Total |        132      100.00
+v(15) v(14) v(13) v(12) v(11) v(10) v(9) v(8) v(7) v(6) v(5) v(4)
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Synthetic Control Method for Comparative Case Studies
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+First Step: Data Setup
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Data Setup successful
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                Treated Unit: 1
+               Control Units:  147 148 149 150 151 152 153 154 155 156 157 158 159 160 161 162 163 164 165 166 167 168 169 170 172
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+          Dependent Variable: v_norm
+  MSPE minimized for periods: 4 5 6 7 8 9 10 11 12 13 14 15
+Results obtained for periods: 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                  Predictors: v(15) v(14) v(13) v(12) v(11) v(10) v(9) v(8) v(7) v(6) v(5) v(4)
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Unless period is specified
+predictors are averaged over: 4 5 6 7 8 9 10 11 12 13 14 15
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Second Step: Run Optimization
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Optimization done
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Third Step: Obtain Results
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Loss: Root Mean Squared Prediction Error
+
+---------------------
+   RMSPE |  .4703506 
+---------------------
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Unit Weights:
+
+-----------------------
+    Co_No | Unit_Weight
+----------+------------
+      147 |           0
+      148 |           0
+      149 |           0
+      150 |           0
+      151 |           0
+      152 |         .07
+      153 |        .259
+      154 |         .32
+      155 |           0
+      156 |           0
+      157 |           0
+      158 |        .119
+      159 |           0
+      160 |           0
+      161 |        .049
+      162 |           0
+      163 |           0
+      164 |        .184
+      165 |           0
+      166 |           0
+      167 |           0
+      168 |           0
+      169 |           0
+      170 |           0
+      172 |           0
+-----------------------
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Predictor Balance:
+
+------------------------------------------------------
+                               |   Treated  Synthetic 
+-------------------------------+----------------------
+                         v(15) |  .4591041   .7139965 
+                         v(14) |  .2019733   .2097155 
+                         v(13) |  .1448178   .1689926 
+                         v(12) |  .1541204   .1902804 
+                         v(11) |  .2380454   .2144222 
+                         v(10) |  .1253453   .1540057 
+                          v(9) |  .1683819   .1761573 
+                          v(8) |  .2108582   .2192482 
+                          v(7) |  .2397263   .2119271 
+                          v(6) |  .2462788   .2587369 
+                          v(5) |  .2645356   .1427145 
+                          v(4) |  .1447693   .1321406 
+------------------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+file /var/folders/b4/3s0qswvn4hb39bgrmwz7606r0000gp/T//S_38741.000007 saved as .dta format
+
+Duplicates in terms of id
+
+--------------------------------------
+   Copies | Observations       Surplus
+----------+---------------------------
+        1 |           25             0
+        8 |            8             7
+--------------------------------------
+variable id does not uniquely identify observations in the master data
+r(459);
+
+. do "/var/folders/b4/3s0qswvn4hb39bgrmwz7606r0000gp/T//SD38741.000000"
+
+. qui use "${cln}/synth_clean_fixedcr.dta", clear 
+
+. qui drop if month_exp <= 3
+
+. qui keep if depvar == "Nominal Yield Baseline" | depvar == "Donors"
+
+. tab asset_class
+
+       asset_class |      Freq.     Percent        Cum.
+-------------------+-----------------------------------
+         Commodity |        759       10.85       10.85
+   Municipal Bonds |      4,224       60.38       71.23
+           Outcome |        132        1.89       73.11
+    Sovereign Bond |        825       11.79       84.91
+Stock Market Index |      1,056       15.09      100.00
+-------------------+-----------------------------------
+             Total |      6,996      100.00
+
+. 
+. *-----------------------------------------------
+. keep if asset_class == "Outcome" | asset_class == "Sovereign Bond"
+(6,039 observations deleted)
+
+. *------------------------------------------------
+. 
+end of do-file
+
+. use "${tem}/all_names.dta", clear 
+
+. do "/var/folders/b4/3s0qswvn4hb39bgrmwz7606r0000gp/T//SD38741.000000"
+
+. qui use "${cln}/synth_clean_fixedcr.dta", clear 
+
+. qui drop if month_exp <= 3
+
+. qui keep if depvar == "Nominal Yield Baseline" | depvar == "Donors"
+
+. tab asset_class
+
+       asset_class |      Freq.     Percent        Cum.
+-------------------+-----------------------------------
+         Commodity |        759       10.85       10.85
+   Municipal Bonds |      4,224       60.38       71.23
+           Outcome |        132        1.89       73.11
+    Sovereign Bond |        825       11.79       84.91
+Stock Market Index |      1,056       15.09      100.00
+-------------------+-----------------------------------
+             Total |      6,996      100.00
+
+. 
+. *-----------------------------------------------
+. keep if asset_class == "Outcome" | asset_class == "Sovereign Bond"
+(6,039 observations deleted)
+
+. *------------------------------------------------
+. 
+end of do-file
+
+. tab name
+
+                name |      Freq.     Percent        Cum.
+---------------------+-----------------------------------
+                   A |         33        3.45        3.45
+                  AA |         33        3.45        6.90
+                 AAA |         33        3.45       10.34
+                 BBB |         33        3.45       13.79
+         ctbef3ygovt |         33        3.45       17.24
+         ctbrl3ygovt |         33        3.45       20.69
+         ctbrl5ygovt |         33        3.45       24.14
+      ctbrlii30tgovt |         33        3.45       27.59
+        ctchf10ygovt |         33        3.45       31.03
+        ctclp10ygovt |         33        3.45       34.48
+         ctczk3ygovt |         33        3.45       37.93
+           ctdemii5y |         33        3.45       41.38
+         ctdkk3ygovt |         33        3.45       44.83
+         ctdkk5ygovt |         33        3.45       48.28
+       cteurlt2ygvot |         33        3.45       51.72
+       cteurro6ygovt |         33        3.45       55.17
+         ctfrf9ygovt |         33        3.45       58.62
+        ctgbp10ygovt |         33        3.45       62.07
+       ctgbpii5ygovt |         33        3.45       65.52
+        ctgrd20ygovt |         33        3.45       68.97
+         ctiep3ygovt |         33        3.45       72.41
+        ctjmd10ygovt |         33        3.45       75.86
+         ctlvl2ygovt |         33        3.45       79.31
+        ctmxn10ygovt |         33        3.45       82.76
+         ctnok3ygovt |         33        3.45       86.21
+         ctnzd5ygovt |         33        3.45       89.66
+         ctpln2ygovt |         33        3.45       93.10
+        ctsek10ygovt |         33        3.45       96.55
+        ctzar10ygovt |         33        3.45      100.00
+---------------------+-----------------------------------
+               Total |        957      100.00
+
+. use "${tem}/all_names.dta", clear 
+
+. tab name 
+
+                name |      Freq.     Percent        Cum.
+---------------------+-----------------------------------
+                   A |          1        0.47        0.47
+                  AA |          1        0.47        0.94
+                 AAA |          1        0.47        1.42
+             ALABAMA |          4        1.89        3.30
+                 BBB |          1        0.47        3.77
+          CALIFORNIA |          4        1.89        5.66
+            COLORADO |          4        1.89        7.55
+         CONNECTICUT |          4        1.89        9.43
+            DELAWARE |          4        1.89       11.32
+             FLORIDA |          4        1.89       13.21
+             GEORGIA |          4        1.89       15.09
+            ILLINOIS |          4        1.89       16.98
+             INDIANA |          4        1.89       18.87
+           LOUISIANA |          4        1.89       20.75
+               MAINE |          4        1.89       22.64
+            MARYLAND |          4        1.89       24.53
+       MASSACHUSETTS |          4        1.89       26.42
+            MICHIGAN |          4        1.89       28.30
+           MINNESOTA |          4        1.89       30.19
+            MISSOURI |          4        1.89       32.08
+            NEBRASKA |          4        1.89       33.96
+              NEVADA |          4        1.89       35.85
+          NEW JERSEY |          4        1.89       37.74
+          NEW MEXICO |          4        1.89       39.62
+                OHIO |          4        1.89       41.51
+            OKLAHOMA |          4        1.89       43.40
+              OREGON |          4        1.89       45.28
+        PENNSYLVANIA |          4        1.89       47.17
+        RHODE ISLAND |          4        1.89       49.06
+      SOUTH CAROLINA |          4        1.89       50.94
+           TENNESSEE |          4        1.89       52.83
+               TEXAS |          4        1.89       54.72
+                UTAH |          4        1.89       56.60
+            VIRGINIA |          4        1.89       58.49
+          WASHINGTON |          4        1.89       60.38
+           WISCONSIN |          4        1.89       62.26
+            aexindex |          1        0.47       62.74
+           as51index |          1        0.47       63.21
+            aseindex |          1        0.47       63.68
+            atxindex |          1        0.47       64.15
+          bel20index |          1        0.47       64.62
+           bo1comdty |          1        0.47       65.09
+            bsxindex |          1        0.47       65.57
+            buxindex |          1        0.47       66.04
+            cacindex |          1        0.47       66.51
+           cc1comdty |          1        0.47       66.98
+           clacomdty |          1        0.47       67.45
+           coacomdty |          1        0.47       67.92
+        coalinequity |          1        0.47       68.40
+           croxindex |          1        0.47       68.87
+         ctbef3ygovt |          1        0.47       69.34
+         ctbrl3ygovt |          1        0.47       69.81
+         ctbrl5ygovt |          1        0.47       70.28
+      ctbrlii30tgovt |          1        0.47       70.75
+        ctchf10ygovt |          1        0.47       71.23
+        ctclp10ygovt |          1        0.47       71.70
+         ctczk3ygovt |          1        0.47       72.17
+           ctdemii5y |          1        0.47       72.64
+         ctdkk3ygovt |          1        0.47       73.11
+         ctdkk5ygovt |          1        0.47       73.58
+       cteurlt2ygvot |          1        0.47       74.06
+       cteurro6ygovt |          1        0.47       74.53
+         ctfrf9ygovt |          1        0.47       75.00
+        ctgbp10ygovt |          1        0.47       75.47
+       ctgbpii5ygovt |          1        0.47       75.94
+        ctgrd20ygovt |          1        0.47       76.42
+         ctiep3ygovt |          1        0.47       76.89
+        ctjmd10ygovt |          1        0.47       77.36
+         ctlvl2ygovt |          1        0.47       77.83
+        ctmxn10ygovt |          1        0.47       78.30
+         ctnok3ygovt |          1        0.47       78.77
+         ctnzd5ygovt |          1        0.47       79.25
+         ctpln2ygovt |          1        0.47       79.72
+        ctsek10ygovt |          1        0.47       80.19
+         ctxeurindex |          1        0.47       80.66
+        ctzar10ygovt |          1        0.47       81.13
+            daxindex |          1        0.47       81.60
+           dl1comdty |          1        0.47       82.08
+           fc1comdty |          1        0.47       82.55
+        ftsemibindex |          1        0.47       83.02
+           gc1comdty |          1        0.47       83.49
+            hexindex |          1        0.47       83.96
+           hg1comdty |          1        0.47       84.43
+            hisindex |          1        0.47       84.91
+           ho1comdty |          1        0.47       85.38
+           ibexindex |          1        0.47       85.85
+          icexiindex |          1        0.47       86.32
+           igpaindex |          1        0.47       86.79
+           induindex |          1        0.47       87.26
+           jo1comdty |          1        0.47       87.74
+           kc1comdty |          1        0.47       88.21
+          kospiindex |          1        0.47       88.68
+         kse100index |          1        0.47       89.15
+           lb1comdty |          1        0.47       89.62
+           lc1comdty |          1        0.47       90.09
+           lh1comdty |          1        0.47       90.57
+         mexbolindex |          1        0.47       91.04
+           ng1comdty |          1        0.47       91.51
+         nse200index |          1        0.47       91.98
+         omxc25index |          1        0.47       92.45
+            omxindex |          1        0.47       92.92
+           or1comdty |          1        0.47       93.40
+           qs1comdty |          1        0.47       93.87
+          rotxlindex |          1        0.47       94.34
+           rr1comdty |          1        0.47       94.81
+           rs1comdty |          1        0.47       95.28
+           rtsiindex |          1        0.47       95.75
+            saxindex |          1        0.47       96.23
+         sensexindex |          1        0.47       96.70
+           si1comdty |          1        0.47       97.17
+           sm1comdty |          1        0.47       97.64
+            smiindex |          1        0.47       98.11
+            spxindex |          1        0.47       98.58
+         utxeurindex |          1        0.47       99.06
+           xb1comdty |          1        0.47       99.53
+       xptusdcurrncy |          1        0.47      100.00
+---------------------+-----------------------------------
+               Total |        212      100.00
+
+. do "/var/folders/b4/3s0qswvn4hb39bgrmwz7606r0000gp/T//SD38741.000000"
+
+. 
+. *-------------------------------------------------------------------------------
+. /// 4. Only Commodities
+> *-------------------------------------------------------------------------------
+. qui use "${cln}/synth_clean_fixedcr.dta", clear 
+
+. qui drop if month_exp <= 3
+
+. qui keep if depvar == "Nominal Yield Baseline" | depvar == "Donors"
+
+. tab asset_class
+
+       asset_class |      Freq.     Percent        Cum.
+-------------------+-----------------------------------
+         Commodity |        759       10.85       10.85
+   Municipal Bonds |      4,224       60.38       71.23
+           Outcome |        132        1.89       73.11
+    Sovereign Bond |        825       11.79       84.91
+Stock Market Index |      1,056       15.09      100.00
+-------------------+-----------------------------------
+             Total |      6,996      100.00
+
+. 
+. *-----------------------------------------------
+. keep if asset_class == "Outcome" | asset_class == "Commodity"
+(6,105 observations deleted)
+
+. *------------------------------------------------
+. 
+. * Estimation 
+. qui synth_leave_one
+variable id does not uniquely identify observations in the master data
+r(459);
+
+end of do-file
+
+r(459);
+
+. do "/var/folders/b4/3s0qswvn4hb39bgrmwz7606r0000gp/T//SD38741.000000"
+
+. 
+. *-------------------------------------------------------------------------------
+. /// 2. Only Stock Market Index
+> *-------------------------------------------------------------------------------
+. qui use "${cln}/synth_clean_fixedcr.dta", clear 
+
+. qui drop if month_exp <= 3
+
+. qui keep if depvar == "Nominal Yield Baseline" | depvar == "Donors"
+
+. tab asset_class
+
+       asset_class |      Freq.     Percent        Cum.
+-------------------+-----------------------------------
+         Commodity |        759       10.85       10.85
+   Municipal Bonds |      4,224       60.38       71.23
+           Outcome |        132        1.89       73.11
+    Sovereign Bond |        825       11.79       84.91
+Stock Market Index |      1,056       15.09      100.00
+-------------------+-----------------------------------
+             Total |      6,996      100.00
+
+. 
+. *-----------------------------------------------
+. keep if asset_class == "Outcome" | asset_class == "Stock Market Index"
+(5,808 observations deleted)
+
+. *------------------------------------------------
+. 
+. * Estimation 
+. qui synth_leave_one
+
+. 
+. /// Save results 
+> preserve 
+
+. qui ate_table 
+
+. list
+
+     +----------------------------------------------------------------------------------------------------------------+
+     |                            Results                AAA                 AA                  A                BBB |
+     |----------------------------------------------------------------------------------------------------------------|
+  1. |       Average Treatment Effect (a)          -0.1080**          -0.0976**          -0.0746**             0.0015 |
+  2. |                                 SE           (0.0633)           (0.0731)           (0.0679)           (0.1060) |
+  3. |                      Conf Interval   (-0.1174,0.0820)   (-0.1356,0.0947)   (-0.1261,0.0880)   (-0.1966,0.1373) |
+  4. |            Historic Volatility (b)             0.2014             0.1539             0.1944             0.5084 |
+  5. |          Volatility March 2020 (c)             0.4661             0.4263             0.4591             0.5244 |
+     |----------------------------------------------------------------------------------------------------------------|
+  6. |      Excess Volatility (d = c - b)             0.2647             0.2724             0.2647             0.0160 |
+  7. | ATE, % Excess Volatility (e = d/a)          40.7792\%          35.8352\%          28.1798\%           9.1714\% |
+  8. |                P-Value (Left Tail)             0.0290             0.0400             0.0460             0.5710 |
+  9. |                P-Value (Two Tails)             0.9600             0.9370             0.9260             0.0630 |
+ 10. |                              RMSPE             0.6850             0.7547             0.6850             0.4209 |
+     +----------------------------------------------------------------------------------------------------------------+
+
+. qui save "${oup}/ate_table_donors_stocks.dta", replace 
+
+. restore 
+
+. 
+. /// Save treatment effects  
+> qui use "${oup}/synth_treated_temp.dta", clear 
+
+. qui save "${oup}/synth_treated_donors_stocks.dta", replace 
+
+. 
+. /// Save weights 
+> qui use "${oup}/weights_results_temp.dta", clear 
+
+. qui save "${oup}/weights_donors_stocks.dta", replace 
+
+. 
+end of do-file
+
+. do "/var/folders/b4/3s0qswvn4hb39bgrmwz7606r0000gp/T//SD38741.000000"
+
+. qui use "${cln}/synth_clean_fixedcr.dta", clear 
+
+. qui drop if month_exp <= 3
+
+. qui keep if depvar == "Nominal Yield Baseline" | depvar == "Donors"
+
+. tab asset_class
+
+       asset_class |      Freq.     Percent        Cum.
+-------------------+-----------------------------------
+         Commodity |        759       10.85       10.85
+   Municipal Bonds |      4,224       60.38       71.23
+           Outcome |        132        1.89       73.11
+    Sovereign Bond |        825       11.79       84.91
+Stock Market Index |      1,056       15.09      100.00
+-------------------+-----------------------------------
+             Total |      6,996      100.00
+
+. 
+. *-----------------------------------------------
+. keep if asset_class == "Outcome" | asset_class == "Municipal Bonds"
+(2,640 observations deleted)
+
+. *------------------------------------------------
+. 
+. * Estimation 
+. qui synth_leave_one
+
+. 
+. 
+. /// Save results 
+> preserve 
+
+. qui ate_table 
+
+. list
+
+     +----------------------------------------------------------------------------------------------------------------+
+     |                            Results                AAA                 AA                  A                BBB |
+     |----------------------------------------------------------------------------------------------------------------|
+  1. |       Average Treatment Effect (a)           -0.0243*            -0.0150             0.0045             0.1439 |
+  2. |                                 SE           (0.0633)           (0.0731)           (0.0679)           (0.1060) |
+  3. |                      Conf Interval   (-0.1174,0.0820)   (-0.1356,0.0947)   (-0.1261,0.0880)   (-0.1966,0.1373) |
+  4. |            Historic Volatility (b)             0.2014             0.1539             0.1944             0.5084 |
+  5. |          Volatility March 2020 (c)             0.4661             0.4263             0.4591             0.5244 |
+     |----------------------------------------------------------------------------------------------------------------|
+  6. |      Excess Volatility (d = c - b)             0.2647             0.2724             0.2647             0.0160 |
+  7. | ATE, % Excess Volatility (e = d/a)           9.1705\%           5.5119\%           1.6888\%                 NA |
+  8. |                P-Value (Left Tail)             0.0970             0.1830             0.6800             0.9770 |
+  9. |                P-Value (Two Tails)             0.8000             0.6170             0.2860             0.9370 |
+ 10. |                              RMSPE             0.0422             0.0290             0.0389             0.2483 |
+     +----------------------------------------------------------------------------------------------------------------+
+
+. qui save "${oup}/ate_table_donors_munis.dta", replace 
+
+. restore 
+
+. 
+. /// Save treatment effects  
+> qui use "${oup}/synth_treated_temp.dta", clear 
+
+. qui save "${oup}/synth_treated_donors_munis.dta", replace 
+
+. 
+. /// Save weights 
+> qui use "${oup}/weights_results_temp.dta", clear 
+
+. qui save "${oup}/weights_donors_munis.dta", replace 
+
+. 
+end of do-file
+
+. do "/var/folders/b4/3s0qswvn4hb39bgrmwz7606r0000gp/T//SD38741.000000"
+
+. ********************************************************************************
+. ********************************************************************************
+. /// Project: Volatility in the Municipal Bond Market and the MLF
+> /// Authors: Felipe Lozano & Luis Navarro
+> /// Code: Luis Navarro (lunavarr@iu.edu) 
+> /// Update: February 2024
+> /// Script: Leave One Out Analysis 
+> ********************************************************************************
+. ********************************************************************************
+. graph drop _all 
+
+. set trace off
+
+. /// Load dates 
+> 
+. ********************************************************************************
+. preserve 
+
+. /// Note: synth_clean_fixedcr is the file for the baseline scenario. In the first iteration of the paper, this was a robustness check. 
+> use "${cln}/synth_clean_fixedcr.dta", clear 
+
+. replace month_exp = month_exp - ${treat_period}
+(8,496 real changes made)
+
+. drop if treat == 0 
+(7,488 observations deleted)
+
+. keep month_exp mofd
+
+. duplicates drop mofd, force 
+
+Duplicates in terms of mofd
+
+(972 observations deleted)
+
+. save "${tem}/dates.dta", replace 
+file 1_Data/Temp//dates.dta saved
+
+. restore 
+
+. 
+. 
+. /// Preserve Names 
+> preserve 
+
+. import delimited "${tem}/ticker_names.csv", clear varnames(1)
+(encoding automatically selected: UTF-8)
+(2 vars, 156 obs)
+
+. tempfile tickers
+
+. duplicates drop namelab, force
+
+Duplicates in terms of namelab
+
+(1 observation deleted)
+
+. save `tickers', replace 
+(file /var/folders/b4/3s0qswvn4hb39bgrmwz7606r0000gp/T//S_38741.000006 not found)
+file /var/folders/b4/3s0qswvn4hb39bgrmwz7606r0000gp/T//S_38741.000006 saved as .dta format
+
+. 
+. use "${cln}/synth_clean_fixedcr.dta", clear 
+
+. drop if data == "Outcome"
+(1,008 observations deleted)
+
+. tostring year, gen(yr)
+yr generated as str4
+
+. gen namelab = name
+
+. replace namelab = name + " (2016-2018)" if year_exp == 2 
+variable namelab was str14 now str26
+(1,152 real changes made)
+
+. replace namelab = name + " (2015-2017)" if year_exp == 3 
+(1,152 real changes made)
+
+. replace namelab = name + " (2014-2016)" if year_exp == 4 
+(1,152 real changes made)
+
+. replace namelab = name + " (2013-2015)" if year_exp == 5 
+(1,152 real changes made)
+
+. replace namelab = varlab if data == "Donor Prices"
+(2,880 real changes made)
+
+. keep namelab id
+
+. duplicates drop id, force
+
+Duplicates in terms of id
+
+(7,280 observations deleted)
+
+. merge 1:1 namelab using `tickers', keep(match master) nogen
+
+    Result                      Number of obs
+    -----------------------------------------
+    Not matched                           130
+        from master                       130  
+        from using                          0  
+
+    Matched                                78  
+    -----------------------------------------
+
+. replace des = namelab if des == ""
+(130 real changes made)
+
+. drop namelab 
+
+. rename des namelab
+
+. sort id
+
+. save "${tem}/varnames.dta", replace 
+file 1_Data/Temp//varnames.dta saved
+
+. 
+. restore 
+
+. 
+. ********************************************************************************
+. 
+. 
+. /// Define program that peforms all the analysis 
+> cap program drop synth_leave_one
+
+. program define synth_leave_one, rclass 
+  1. 
+. graph drop _all 
+  2. /// Step 1. Synth Estimation 
+> qui drop if month_exp <= 3
+  3. tempfile dataset 
+  4. save `dataset', replace 
+  5. 
+. /// Run the synthetic control estimator 
+> synth_estimation
+  6. qui tempfile synth_treated
+  7. qui save `synth_treated', replace 
+  8. save "${oup}/synth_treated_temp.dta", replace 
+  9. 
+. *-------------------------------------------------------------------------------
+. /// Step 2. Donor Weight Plot 
+> qui local title1 = "Donor Weights - A"
+ 10. qui local title2 = "Donor Weights - AA"
+ 11. qui local title3 = "Donor Weights - AAA"
+ 12. qui local title4 = "Donor Weights - BBB"
+ 13. 
+. forvalues i = 1(1)4{
+ 14. 
+. qui use "${tem}/scm_weight_`i'.dta", clear 
+ 15. qui drop if weight == 0
+ 16. qui merge 1:1 id using "${tem}/varnames.dta", keep(match master) nogen 
+ 17. qui label variable weight "Donor Weights"
+ 18. qui drop id
+ 19. qui tempfile donor_weight_`i'
+ 20. qui save `donor_weight_`i'', replace 
+ 21. }
+ 22. 
+. use `donor_weight_1', clear 
+ 23. forvalues i = 2(1)4{
+ 24.         qui append using `donor_weight_`i''
+ 25. }
+ 26. 
+. qui save "${oup}/weights_results_temp.dta", replace 
+ 27. 
+. /// Step 4. Express placebos in units of the treated series 
+> use `dataset', clear 
+ 28. placebo_outcome_main
+ 29. tempfile synth_placebos
+ 30. save `synth_placebos', replace 
+ 31. *-------------------------------------------------------------------------------
+. 
+. 
+. /// Step 5. Identify the placebos that pass the cohen-d criterion 
+> qui use `synth_placebos', clear 
+ 32. qui merge m:1 id using "${tem}/placebosforinferencerce_main.dta", keep(match master) nogen
+ 33. qui tab survival
+ 34. qui keep if survival == 1
+ 35. /// Save data 
+> qui tempfile placeboempiricaldistribution
+ 36. qui save `placeboempiricaldistribution', replace 
+ 37. 
+. 
+. /// Step 6. Compute ATE Tables 
+> qui use `synth_treated', clear 
+ 38. *use "${tem}/synth_treated.dta", clear 
+. qui tab fileid
+ 39. global cols = r(r)
+ 40. 
+. local title1 = "A"
+ 41. local title2 = "AA"
+ 42. local title3 = "AAA"
+ 43. local title4 = "BBB"
+ 44. /// Matrix to store results 
+> matrix define R=J(12,$cols,.)
+ 45. matrix colnames R = "A" "AA" "AAA" "BBB"
+ 46. matrix rownames R = "ate" "se" "ci_min" "ci_max"  "pval2" "pval1" "vol_pre" "vol_treat" "excess_vol" "ate_excess_vol" "rmspe" "id"
+ 47. matlist R 
+ 48. 
+. /// Loop to compute the ATE for each treated unit 
+> forvalues j = 1(1)$cols { 
+ 49.         //// 1.- Store All Treated Unit Characteristics 
+> 
+.         qui use `synth_treated', clear
+ 50.         qui egen group = group(id fileid)
+ 51.         qui drop ate tr_eff
+ 52.         /// Estimate Treatment Effect Using Treated and Synthetic Series 
+>         bysort group: gen tr_eff = treat_lev - synth_lev
+ 53.         bysort group: egen ate = mean(tr_eff) if month_exp >=0 & month_exp <= ${tr_eff_window}
+ 54.         /// Pre-Measures in Volatility 
+>         /// Keep only instrument `j' and donors 
+>         qui keep if fileid == `j'
+ 55.         /// Average Treatment Effect 
+>         qui sum ate 
+ 56.         global ate = r(mean)
+ 57.         mat R[1,`j'] = $ate
+ 58.         /// ATE in absolute value (to compute ATE in percent of Excess Volatility)
+>         local absate = abs($ate)
+ 59.         /// Volatility Pre-Treatment Period: Average Volatility Observed in the Pre-Treatment Period 
+>         qui sum treat_lev if month_exp < -1
+ 60.         local vol_pre = r(mean)
+ 61.         mat R[7,`j'] = `vol_pre'
+ 62.         /// Volatility Observed in March 2020: Spike due to COVID 
+>         qui sum treat_lev if month_exp == -1
+ 63.         local vol_treat = r(mean)
+ 64.         mat R[8,`j'] = `vol_treat'
+ 65.         /// Compute Excess Volatility: Difference in Average Volatility and Volatility During the Pandemic 
+>         local excess_vol = `vol_treat' - `vol_pre'
+ 66.         mat R[9,`j'] = `excess_vol'
+ 67.         /// ATE in Terms of Excess Volatility 
+>         local ate_excess_vol = 100*(`absate'/`excess_vol')
+ 68.         if abs(`ate_excess_vol') > 300 {
+ 69.     local ate_excess_vol = "."
+ 70.         }
+ 71.         mat R[10,`j'] = `ate_excess_vol'
+ 72.         /// RMSE 
+>         qui sum rmse 
+ 73.         mat R[11,`j'] = r(mean)
+ 74.         /// Id
+>         qui sum id 
+ 75.         mat R[12,`j'] = r(mean)
+ 76. 
+.         
+.         /// 2.- Count How Many times the ATE for the treated unit exceeds the ATE at the placebo empirical distribution 
+>         *preserve 
+.         qui use "${tem}/placeboempiricaldistribution_main.dta" , clear 
+ 77.         /// Estimate the Average Treatment Effect for the specific window 
+>         qui egen group = group(id fileid)
+ 78.         qui drop ate
+ 79.         /// Average Treatment Effect estimated over the 
+>         bysort group: egen ate = mean(tr_eff) if month_exp >=0 & month_exp <= ${tr_eff_window}
+ 80.         qui gcollapse (mean) ate, by(id fileid group)
+ 81.         /// keep only the empirical distribution of state j
+>         qui keep if fileid == `j'
+ 82.         /// Standard Error 
+>         qui sum ate 
+ 83.         local se = r(sd)
+ 84.         mat R[2,`j'] = `se'
+ 85.         /// Hypothesis Testing and P Values 
+>         qui cumul ate, gen(cdf)
+ 86.         qui gsort cdf
+ 87.         /// Hypothesis Testing and P Values 
+>         _pctile ate, percentiles(2.5 97.5)
+ 88.         mat R[3,`j'] = r(r1)
+ 89.         mat R[4,`j'] = r(r2)
+ 90.         /// Cavallo Permutation Test Approach: Left-sided one-tail test. 
+>         /// Hypothesis: negative coefficient, hence the left-test. 
+>         /// Left-sided test: count how many times the placebos are more negative than the treatment effect. 
+>         /// (Inutition: p-val = 0 implies the ATE is more negative than all the placebos, ie: is smaller in all cases). 
+>         /// The p-value is the number of time the ATE is larger than the placebo estimates. 
+>         qui gen pcount = ate < $ate 
+ 91.         /// p-value 
+>         qui sum pcount 
+ 92.     local pval1 = round(r(mean),0.001)
+ 93.         mat R[5,`j'] = `pval1'
+ 94.         
+.         /// Two Tail Test 
+>         qui drop pcount 
+ 95.         qui gen atetreat = abs($ate)
+ 96.         qui gen absate = abs(ate)
+ 97.         /// count how many times the 
+>         qui gen pcount = absate < atetreat
+ 98.         qui sum pcount
+ 99.         local pval2= round(r(mean),0.001)
+100.         mat R[6,`j'] = `pval2'
+101.         
+.         
+. }
+102. 
+. * End program 
+. end 
+
+. 
+. 
+. *-------------------------------------------------------------------------------
+. cap program drop leave_one_out_loop
+
+. program define leave_one_out_loop, rclass 
+  1. qui levelsof id if data != "Outcome", local(donors)
+  2. 
+. local j = 1
+  3. foreach x of local donors {
+  4.         dis `j'
+  5.         preserve 
+  6.         /// Leave one donor out
+>         qui drop if id == `x'
+  7.         
+.         /// Estimate the synth 
+>         qui synth_leave_one
+  8.         
+.         /// Save results 
+>         preserve
+  9.         qui gen leave_id = `x'
+ 10.         qui save "${oup}/ate_loa_`j'.dta", replace 
+ 11.         restore 
+ 12.         
+.         preserve 
+ 13.         qui ate_table 
+ 14.         qui save "${oup}/ate_table_`j'.dta", replace 
+ 15.         restore 
+ 16.         
+.         /// Save treatment effects  
+>         qui use "${oup}/synth_treated_temp.dta", clear 
+ 17.         qui gen leave_id = `x'
+ 18.         qui save "${oup}/synth_treated_`j'.dta", replace 
+ 19.         
+.         /// Save weights 
+>         qui use "${oup}/weights_results_temp.dta", clear 
+ 20.         qui gen leave_id = `x'
+ 21.         qui save "${oup}/weight_loa_`j'.dta", replace 
+ 22.         restore 
+ 23.         local j = `j' + 1
+ 24.         
+. }
+ 25. 
+. 
+. end 
+
+. *-------------------------------------------------------------------------------
+. 
+. *-------------------------------------------------------------------------------
+. *-------------------------------------------------------------------------------
+. 
+end of do-file
+
+. do "/var/folders/b4/3s0qswvn4hb39bgrmwz7606r0000gp/T//SD38741.000000"
+
+. qui use "${cln}/synth_clean_fixedcr.dta", clear 
+
+. qui drop if month_exp <= 3
+
+. qui keep if depvar == "Nominal Yield Baseline" | depvar == "Donors"
+
+. tab asset_class
+
+       asset_class |      Freq.     Percent        Cum.
+-------------------+-----------------------------------
+         Commodity |        759       10.85       10.85
+   Municipal Bonds |      4,224       60.38       71.23
+           Outcome |        132        1.89       73.11
+    Sovereign Bond |        825       11.79       84.91
+Stock Market Index |      1,056       15.09      100.00
+-------------------+-----------------------------------
+             Total |      6,996      100.00
+
+. 
+end of do-file
+
+. do "/var/folders/b4/3s0qswvn4hb39bgrmwz7606r0000gp/T//SD38741.000000"
+
+. qui synth_leave_one
+
+. 
+end of do-file
+
+. do "/var/folders/b4/3s0qswvn4hb39bgrmwz7606r0000gp/T//SD38741.000000"
+
+. preserve 
+
+. qui ate_table 
+
+. list
+
+     +----------------------------------------------------------------------------------------------------------------+
+     |                            Results                AAA                 AA                  A                BBB |
+     |----------------------------------------------------------------------------------------------------------------|
+  1. |       Average Treatment Effect (a)          -0.2138**          -0.1912**          -0.1156**             0.0718 |
+  2. |                                 SE           (0.0633)           (0.0731)           (0.0679)           (0.1060) |
+  3. |                      Conf Interval   (-0.1174,0.0820)   (-0.1356,0.0947)   (-0.1261,0.0880)   (-0.1966,0.1373) |
+  4. |            Historic Volatility (b)             0.2014             0.1539             0.1944             0.5084 |
+  5. |          Volatility March 2020 (c)             0.4661             0.4263             0.4591             0.5244 |
+     |----------------------------------------------------------------------------------------------------------------|
+  6. |      Excess Volatility (d = c - b)             0.2647             0.2724             0.2647             0.0160 |
+  7. | ATE, % Excess Volatility (e = d/a)          80.7408\%          70.1650\%          43.6677\%                 NA |
+  8. |                P-Value (Left Tail)             0.0170             0.0170             0.0290             0.9600 |
+  9. |                P-Value (Two Tails)             0.9770             0.9770             0.9600             0.8910 |
+ 10. |                              RMSPE             0.0014             0.0047             0.0004             0.0287 |
+     +----------------------------------------------------------------------------------------------------------------+
+
+. *qui save "${oup}/ate_table_donors_munis.dta", replace 
+. restore 
+
+. 
+end of do-file
+
+. do "/var/folders/b4/3s0qswvn4hb39bgrmwz7606r0000gp/T//SD38741.000000"
+
+. qui use "${oup}/synth_treated_temp.dta", clear 
+
+. 
+end of do-file
+
+. do "/var/folders/b4/3s0qswvn4hb39bgrmwz7606r0000gp/T//SD38741.000000"
+
+. qui use "${oup}/weights_results_temp.dta", clear 
+
+. 
+end of do-file
+
+. do "/var/folders/b4/3s0qswvn4hb39bgrmwz7606r0000gp/T//SD38741.000000"
+
+. 
+. *-------------------------------------------------------------------------------
+. /// 1. Only Muni Bonds
+> *-------------------------------------------------------------------------------
+. qui use "${cln}/synth_clean_fixedcr.dta", clear 
+
+. qui drop if month_exp <= 3
+
+. qui keep if depvar == "Nominal Yield Baseline" | depvar == "Donors"
+
+. tab asset_class
+
+       asset_class |      Freq.     Percent        Cum.
+-------------------+-----------------------------------
+         Commodity |        759       10.85       10.85
+   Municipal Bonds |      4,224       60.38       71.23
+           Outcome |        132        1.89       73.11
+    Sovereign Bond |        825       11.79       84.91
+Stock Market Index |      1,056       15.09      100.00
+-------------------+-----------------------------------
+             Total |      6,996      100.00
+
+. 
+. *-----------------------------------------------
+. keep if asset_class == "Outcome" | asset_class == "Municipal Bonds"
+(2,640 observations deleted)
+
+. *------------------------------------------------
+. 
+. * Estimation 
+. qui synth_leave_one
+
+. 
+. 
+. /// Save results 
+> preserve 
+
+. qui ate_table 
+
+. list
+
+     +----------------------------------------------------------------------------------------------------------------+
+     |                            Results                AAA                 AA                  A                BBB |
+     |----------------------------------------------------------------------------------------------------------------|
+  1. |       Average Treatment Effect (a)           -0.0243*            -0.0150             0.0045             0.1439 |
+  2. |                                 SE           (0.0633)           (0.0731)           (0.0679)           (0.1060) |
+  3. |                      Conf Interval   (-0.1174,0.0820)   (-0.1356,0.0947)   (-0.1261,0.0880)   (-0.1966,0.1373) |
+  4. |            Historic Volatility (b)             0.2014             0.1539             0.1944             0.5084 |
+  5. |          Volatility March 2020 (c)             0.4661             0.4263             0.4591             0.5244 |
+     |----------------------------------------------------------------------------------------------------------------|
+  6. |      Excess Volatility (d = c - b)             0.2647             0.2724             0.2647             0.0160 |
+  7. | ATE, % Excess Volatility (e = d/a)           9.1705\%           5.5119\%           1.6888\%                 NA |
+  8. |                P-Value (Left Tail)             0.0970             0.1830             0.6800             0.9770 |
+  9. |                P-Value (Two Tails)             0.8000             0.6170             0.2860             0.9370 |
+ 10. |                              RMSPE             0.0422             0.0290             0.0389             0.2483 |
+     +----------------------------------------------------------------------------------------------------------------+
+
+. qui save "${oup}/ate_table_donors_munis.dta", replace 
+
+. restore 
+
+. 
+. /// Save treatment effects  
+> qui use "${oup}/synth_treated_temp.dta", clear 
+
+. qui save "${oup}/synth_treated_donors_munis.dta", replace 
+
+. 
+. /// Save weights 
+> qui use "${oup}/weights_results_temp.dta", clear 
+
+. qui save "${oup}/weights_donors_munis.dta", replace 
+
+. 
+end of do-file
+
+. do "/var/folders/b4/3s0qswvn4hb39bgrmwz7606r0000gp/T//SD38741.000000"
+
+. qui use "${cln}/synth_clean_fixedcr.dta", clear 
+
+. qui drop if month_exp <= 3
+
+. qui keep if depvar == "Nominal Yield Baseline" | depvar == "Donors"
+
+. tab asset_class
+
+       asset_class |      Freq.     Percent        Cum.
+-------------------+-----------------------------------
+         Commodity |        759       10.85       10.85
+   Municipal Bonds |      4,224       60.38       71.23
+           Outcome |        132        1.89       73.11
+    Sovereign Bond |        825       11.79       84.91
+Stock Market Index |      1,056       15.09      100.00
+-------------------+-----------------------------------
+             Total |      6,996      100.00
+
+. 
+. *-----------------------------------------------
+. keep if asset_class == "Outcome" | asset_class == "Municipal Bonds"
+(2,640 observations deleted)
+
+. *------------------------------------------------
+. 
+. * Estimation 
+. synth_leave_one
+(file /var/folders/b4/3s0qswvn4hb39bgrmwz7606r0000gp/T//S_38741.000004 not found)
+file /var/folders/b4/3s0qswvn4hb39bgrmwz7606r0000gp/T//S_38741.000004 saved as .dta format
+v_pre_mn:  (2,772 real changes made)
+v_pre_sd:  (2,772 real changes made)
+
+  group(id) |      Freq.     Percent        Cum.
+------------+-----------------------------------
+          1 |         33       25.00       25.00
+          2 |         33       25.00       50.00
+          3 |         33       25.00       75.00
+          4 |         33       25.00      100.00
+------------+-----------------------------------
+      Total |        132      100.00
+v(15) v(14) v(13) v(12) v(11) v(10) v(9) v(8) v(7) v(6) v(5) v(4)
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Synthetic Control Method for Comparative Case Studies
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+First Step: Data Setup
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Data Setup successful
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                Treated Unit: 1
+               Control Units:  5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50
+                              51 52 53 54 55 56 57 58 59 60 61 62 63 64 65 66 67 68 69 70 71 72 73 74 75 76 77 78 79 80 81 82 83 84 85 86 87 88 89 90 91 92 93 94 95
+                              96 97 98 99 100 101 102 103 104 105 106 107 108 109 110 111 112 113 114 115 116 117 118 119 120 121 122 123 124 125 126 127 128 129 130
+                              131 132
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+          Dependent Variable: v_norm
+  MSPE minimized for periods: 4 5 6 7 8 9 10 11 12 13 14 15
+Results obtained for periods: 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                  Predictors: v(15) v(14) v(13) v(12) v(11) v(10) v(9) v(8) v(7) v(6) v(5) v(4)
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Unless period is specified
+predictors are averaged over: 4 5 6 7 8 9 10 11 12 13 14 15
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Second Step: Run Optimization
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Optimization done
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Third Step: Obtain Results
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Loss: Root Mean Squared Prediction Error
+
+---------------------
+   RMSPE |  1.160235 
+---------------------
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Unit Weights:
+
+-----------------------
+    Co_No | Unit_Weight
+----------+------------
+        5 |           0
+        6 |           0
+        7 |           0
+        8 |           0
+        9 |           0
+       10 |           0
+       11 |           0
+       12 |           0
+       13 |           0
+       14 |           0
+       15 |           0
+       16 |           0
+       17 |           0
+       18 |           0
+       19 |           0
+       20 |           0
+       21 |           0
+       22 |           0
+       23 |           0
+       24 |           0
+       25 |           0
+       26 |           0
+       27 |           0
+       28 |           0
+       29 |           0
+       30 |           0
+       31 |           0
+       32 |           0
+       33 |           0
+       34 |           0
+       35 |           0
+       36 |           0
+       37 |           0
+       38 |           0
+       39 |           0
+       40 |           0
+       41 |           0
+       42 |           0
+       43 |           0
+       44 |           0
+       45 |           0
+       46 |           0
+       47 |           0
+       48 |           0
+       49 |           0
+       50 |           0
+       51 |           0
+       52 |           0
+       53 |           0
+       54 |           0
+       55 |           0
+       56 |           0
+       57 |           0
+       58 |           0
+       59 |           0
+       60 |           0
+       61 |           0
+       62 |           0
+       63 |           0
+       64 |           0
+       65 |           0
+       66 |           0
+       67 |           0
+       68 |           0
+       69 |           0
+       70 |           0
+       71 |           0
+       72 |           0
+       73 |           0
+       74 |           0
+       75 |           0
+       76 |           0
+       77 |           0
+       78 |           0
+       79 |           0
+       80 |           0
+       81 |           0
+       82 |           0
+       83 |           0
+       84 |           0
+       85 |           0
+       86 |           0
+       87 |           0
+       88 |           0
+       89 |           0
+       90 |           0
+       91 |           0
+       92 |           0
+       93 |           0
+       94 |           0
+       95 |           0
+       96 |           0
+       97 |           0
+       98 |           0
+       99 |           0
+      100 |           0
+      101 |           0
+      102 |           0
+      103 |           0
+      104 |           0
+      105 |           0
+      106 |           0
+      107 |           0
+      108 |           0
+      109 |           0
+      110 |           0
+      111 |           0
+      112 |           0
+      113 |           0
+      114 |           0
+      115 |           0
+      116 |           1
+      117 |           0
+      118 |           0
+      119 |           0
+      120 |           0
+      121 |           0
+      122 |           0
+      123 |           0
+      124 |           0
+      125 |           0
+      126 |           0
+      127 |           0
+      128 |           0
+      129 |           0
+      130 |           0
+      131 |           0
+      132 |           0
+-----------------------
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Predictor Balance:
+
+------------------------------------------------------
+                               |   Treated  Synthetic 
+-------------------------------+----------------------
+                         v(15) |  .4591041   .0475046 
+                         v(14) |  .2019733    .017903 
+                         v(13) |  .1448178   .0317087 
+                         v(12) |  .1541204   .0187076 
+                         v(11) |  .2380454   .0199302 
+                         v(10) |  .1253453   .0261278 
+                          v(9) |  .1683819   .0485726 
+                          v(8) |  .2108582   .0249142 
+                          v(7) |  .2397263   .0434934 
+                          v(6) |  .2462788   .1302315 
+                          v(5) |  .2645356   .0238963 
+                          v(4) |  .1447693   .0170865 
+------------------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+file /var/folders/b4/3s0qswvn4hb39bgrmwz7606r0000gp/T//S_38741.000008 saved as .dta format
+
+Duplicates in terms of id
+
+--------------------------------------
+   Copies | Observations       Surplus
+----------+---------------------------
+        1 |          128             0
+--------------------------------------
+
+    Result                      Number of obs
+    -----------------------------------------
+    Not matched                             0
+    Matched                               128  
+    -----------------------------------------
+file 1_Data/Temp//scm_weight_1.dta saved
+   2:      2.05 /        1 =       2.0490
+Treatment Unit 1 out of 4
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Synthetic Control Method for Comparative Case Studies
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+First Step: Data Setup
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Data Setup successful
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                Treated Unit: 2
+               Control Units:  5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50
+                              51 52 53 54 55 56 57 58 59 60 61 62 63 64 65 66 67 68 69 70 71 72 73 74 75 76 77 78 79 80 81 82 83 84 85 86 87 88 89 90 91 92 93 94 95
+                              96 97 98 99 100 101 102 103 104 105 106 107 108 109 110 111 112 113 114 115 116 117 118 119 120 121 122 123 124 125 126 127 128 129 130
+                              131 132
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+          Dependent Variable: v_norm
+  MSPE minimized for periods: 4 5 6 7 8 9 10 11 12 13 14 15
+Results obtained for periods: 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                  Predictors: v(15) v(14) v(13) v(12) v(11) v(10) v(9) v(8) v(7) v(6) v(5) v(4)
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Unless period is specified
+predictors are averaged over: 4 5 6 7 8 9 10 11 12 13 14 15
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Second Step: Run Optimization
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Optimization done
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Third Step: Obtain Results
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Loss: Root Mean Squared Prediction Error
+
+---------------------
+   RMSPE |  1.356508 
+---------------------
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Unit Weights:
+
+-----------------------
+    Co_No | Unit_Weight
+----------+------------
+        5 |           0
+        6 |           0
+        7 |           0
+        8 |           1
+        9 |           0
+       10 |           0
+       11 |           0
+       12 |           0
+       13 |           0
+       14 |           0
+       15 |           0
+       16 |           0
+       17 |           0
+       18 |           0
+       19 |           0
+       20 |           0
+       21 |           0
+       22 |           0
+       23 |           0
+       24 |           0
+       25 |           0
+       26 |           0
+       27 |           0
+       28 |           0
+       29 |           0
+       30 |           0
+       31 |           0
+       32 |           0
+       33 |           0
+       34 |           0
+       35 |           0
+       36 |           0
+       37 |           0
+       38 |           0
+       39 |           0
+       40 |           0
+       41 |           0
+       42 |           0
+       43 |           0
+       44 |           0
+       45 |           0
+       46 |           0
+       47 |           0
+       48 |           0
+       49 |           0
+       50 |           0
+       51 |           0
+       52 |           0
+       53 |           0
+       54 |           0
+       55 |           0
+       56 |           0
+       57 |           0
+       58 |           0
+       59 |           0
+       60 |           0
+       61 |           0
+       62 |           0
+       63 |           0
+       64 |           0
+       65 |           0
+       66 |           0
+       67 |           0
+       68 |           0
+       69 |           0
+       70 |           0
+       71 |           0
+       72 |           0
+       73 |           0
+       74 |           0
+       75 |           0
+       76 |           0
+       77 |           0
+       78 |           0
+       79 |           0
+       80 |           0
+       81 |           0
+       82 |           0
+       83 |           0
+       84 |           0
+       85 |           0
+       86 |           0
+       87 |           0
+       88 |           0
+       89 |           0
+       90 |           0
+       91 |           0
+       92 |           0
+       93 |           0
+       94 |           0
+       95 |           0
+       96 |           0
+       97 |           0
+       98 |           0
+       99 |           0
+      100 |           0
+      101 |           0
+      102 |           0
+      103 |           0
+      104 |           0
+      105 |           0
+      106 |           0
+      107 |           0
+      108 |           0
+      109 |           0
+      110 |           0
+      111 |           0
+      112 |           0
+      113 |           0
+      114 |           0
+      115 |           0
+      116 |           0
+      117 |           0
+      118 |           0
+      119 |           0
+      120 |           0
+      121 |           0
+      122 |           0
+      123 |           0
+      124 |           0
+      125 |           0
+      126 |           0
+      127 |           0
+      128 |           0
+      129 |           0
+      130 |           0
+      131 |           0
+      132 |           0
+-----------------------
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Predictor Balance:
+
+------------------------------------------------------
+                               |   Treated  Synthetic 
+-------------------------------+----------------------
+                         v(15) |  .4262888   .0460525 
+                         v(14) |  .0655433   .0139844 
+                         v(13) |  .0953144   .0366765 
+                         v(12) |  .1009645   .0171554 
+                         v(11) |  .2546003   .0185595 
+                         v(10) |  .1920579   .0237323 
+                          v(9) |  .1324195   .0456414 
+                          v(8) |  .2315191   .0204537 
+                          v(7) |  .1360013   .0384198 
+                          v(6) |  .1366643   .1221117 
+                          v(5) |  .1550362   .0293458 
+                          v(4) |  .1923215   .0222278 
+------------------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+file /var/folders/b4/3s0qswvn4hb39bgrmwz7606r0000gp/T//S_38741.00000d saved as .dta format
+
+Duplicates in terms of id
+
+--------------------------------------
+   Copies | Observations       Surplus
+----------+---------------------------
+        1 |          128             0
+--------------------------------------
+
+    Result                      Number of obs
+    -----------------------------------------
+    Not matched                             0
+    Matched                               128  
+    -----------------------------------------
+file 1_Data/Temp//scm_weight_2.dta saved
+   2:      2.06 /        1 =       2.0620
+Treatment Unit 2 out of 4
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Synthetic Control Method for Comparative Case Studies
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+First Step: Data Setup
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Data Setup successful
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                Treated Unit: 3
+               Control Units:  5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50
+                              51 52 53 54 55 56 57 58 59 60 61 62 63 64 65 66 67 68 69 70 71 72 73 74 75 76 77 78 79 80 81 82 83 84 85 86 87 88 89 90 91 92 93 94 95
+                              96 97 98 99 100 101 102 103 104 105 106 107 108 109 110 111 112 113 114 115 116 117 118 119 120 121 122 123 124 125 126 127 128 129 130
+                              131 132
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+          Dependent Variable: v_norm
+  MSPE minimized for periods: 4 5 6 7 8 9 10 11 12 13 14 15
+Results obtained for periods: 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                  Predictors: v(15) v(14) v(13) v(12) v(11) v(10) v(9) v(8) v(7) v(6) v(5) v(4)
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Unless period is specified
+predictors are averaged over: 4 5 6 7 8 9 10 11 12 13 14 15
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Second Step: Run Optimization
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Optimization done
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Third Step: Obtain Results
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Loss: Root Mean Squared Prediction Error
+
+---------------------
+   RMSPE |  1.157672 
+---------------------
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Unit Weights:
+
+-----------------------
+    Co_No | Unit_Weight
+----------+------------
+        5 |           0
+        6 |           0
+        7 |           0
+        8 |           0
+        9 |           0
+       10 |           0
+       11 |           0
+       12 |           0
+       13 |           0
+       14 |           0
+       15 |           0
+       16 |           0
+       17 |           0
+       18 |           0
+       19 |           0
+       20 |           0
+       21 |           0
+       22 |           0
+       23 |           0
+       24 |           0
+       25 |           0
+       26 |           0
+       27 |           0
+       28 |           0
+       29 |           0
+       30 |           0
+       31 |           0
+       32 |           0
+       33 |           0
+       34 |           0
+       35 |           0
+       36 |           0
+       37 |           0
+       38 |           0
+       39 |           0
+       40 |           0
+       41 |           0
+       42 |           0
+       43 |           0
+       44 |           0
+       45 |           0
+       46 |           0
+       47 |           0
+       48 |           0
+       49 |           0
+       50 |           0
+       51 |           0
+       52 |           0
+       53 |           0
+       54 |           0
+       55 |           0
+       56 |           0
+       57 |           0
+       58 |           0
+       59 |           0
+       60 |           0
+       61 |           0
+       62 |           0
+       63 |           0
+       64 |           0
+       65 |           0
+       66 |           0
+       67 |           0
+       68 |           0
+       69 |           0
+       70 |           0
+       71 |           0
+       72 |           0
+       73 |           0
+       74 |           0
+       75 |           0
+       76 |           0
+       77 |           0
+       78 |           0
+       79 |           0
+       80 |           0
+       81 |           0
+       82 |           0
+       83 |           0
+       84 |           0
+       85 |           0
+       86 |           0
+       87 |           0
+       88 |           0
+       89 |           0
+       90 |           0
+       91 |           0
+       92 |           0
+       93 |           0
+       94 |           0
+       95 |           0
+       96 |           0
+       97 |           0
+       98 |           0
+       99 |           0
+      100 |           0
+      101 |           0
+      102 |           0
+      103 |           0
+      104 |           0
+      105 |           0
+      106 |           0
+      107 |           0
+      108 |           0
+      109 |           0
+      110 |           0
+      111 |           0
+      112 |           0
+      113 |           0
+      114 |           0
+      115 |           0
+      116 |           1
+      117 |           0
+      118 |           0
+      119 |           0
+      120 |           0
+      121 |           0
+      122 |           0
+      123 |           0
+      124 |           0
+      125 |           0
+      126 |           0
+      127 |           0
+      128 |           0
+      129 |           0
+      130 |           0
+      131 |           0
+      132 |           0
+-----------------------
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Predictor Balance:
+
+------------------------------------------------------
+                               |   Treated  Synthetic 
+-------------------------------+----------------------
+                         v(15) |  .4661015   .0475046 
+                         v(14) |  .1655047    .017903 
+                         v(13) |  .1297227   .0317087 
+                         v(12) |  .1641958   .0187076 
+                         v(11) |  .3311599   .0199302 
+                         v(10) |  .1784493   .0261278 
+                          v(9) |  .2578021   .0485726 
+                          v(8) |  .1737149   .0249142 
+                          v(7) |  .2175397   .0434934 
+                          v(6) |  .2465736   .1302315 
+                          v(5) |  .2040652   .0238963 
+                          v(4) |  .1462529   .0170865 
+------------------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+file /var/folders/b4/3s0qswvn4hb39bgrmwz7606r0000gp/T//S_38741.00000i saved as .dta format
+
+Duplicates in terms of id
+
+--------------------------------------
+   Copies | Observations       Surplus
+----------+---------------------------
+        1 |          128             0
+--------------------------------------
+
+    Result                      Number of obs
+    -----------------------------------------
+    Not matched                             0
+    Matched                               128  
+    -----------------------------------------
+file 1_Data/Temp//scm_weight_3.dta saved
+   2:      2.04 /        1 =       2.0410
+Treatment Unit 3 out of 4
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Synthetic Control Method for Comparative Case Studies
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+First Step: Data Setup
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Data Setup successful
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                Treated Unit: 4
+               Control Units:  5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50
+                              51 52 53 54 55 56 57 58 59 60 61 62 63 64 65 66 67 68 69 70 71 72 73 74 75 76 77 78 79 80 81 82 83 84 85 86 87 88 89 90 91 92 93 94 95
+                              96 97 98 99 100 101 102 103 104 105 106 107 108 109 110 111 112 113 114 115 116 117 118 119 120 121 122 123 124 125 126 127 128 129 130
+                              131 132
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+          Dependent Variable: v_norm
+  MSPE minimized for periods: 4 5 6 7 8 9 10 11 12 13 14 15
+Results obtained for periods: 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                  Predictors: v(15) v(14) v(13) v(12) v(11) v(10) v(9) v(8) v(7) v(6) v(5) v(4)
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Unless period is specified
+predictors are averaged over: 4 5 6 7 8 9 10 11 12 13 14 15
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Second Step: Run Optimization
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Optimization done
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Third Step: Obtain Results
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Loss: Root Mean Squared Prediction Error
+
+---------------------
+   RMSPE |  1.392102 
+---------------------
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Unit Weights:
+
+-----------------------
+    Co_No | Unit_Weight
+----------+------------
+        5 |           0
+        6 |           0
+        7 |           0
+        8 |           0
+        9 |           0
+       10 |           0
+       11 |           0
+       12 |           0
+       13 |           0
+       14 |           0
+       15 |           0
+       16 |           0
+       17 |           0
+       18 |           0
+       19 |           0
+       20 |           0
+       21 |           0
+       22 |           0
+       23 |           0
+       24 |           0
+       25 |           0
+       26 |           0
+       27 |           0
+       28 |           0
+       29 |           0
+       30 |           0
+       31 |           0
+       32 |           0
+       33 |           0
+       34 |           0
+       35 |           0
+       36 |           0
+       37 |           0
+       38 |           0
+       39 |           0
+       40 |           0
+       41 |           0
+       42 |           0
+       43 |           0
+       44 |           0
+       45 |           0
+       46 |           0
+       47 |           0
+       48 |           0
+       49 |           0
+       50 |           0
+       51 |           0
+       52 |           0
+       53 |           0
+       54 |           0
+       55 |           0
+       56 |           0
+       57 |           0
+       58 |           0
+       59 |           0
+       60 |           0
+       61 |           0
+       62 |           0
+       63 |           0
+       64 |           0
+       65 |           0
+       66 |           0
+       67 |           0
+       68 |           0
+       69 |           0
+       70 |           0
+       71 |           0
+       72 |           0
+       73 |           0
+       74 |           0
+       75 |           0
+       76 |           0
+       77 |           0
+       78 |           0
+       79 |           0
+       80 |           0
+       81 |           0
+       82 |           0
+       83 |           0
+       84 |           0
+       85 |           0
+       86 |           0
+       87 |           0
+       88 |           0
+       89 |           0
+       90 |           0
+       91 |           0
+       92 |           0
+       93 |           0
+       94 |           0
+       95 |           0
+       96 |           0
+       97 |           0
+       98 |           0
+       99 |           0
+      100 |           0
+      101 |           0
+      102 |           0
+      103 |           0
+      104 |           0
+      105 |           0
+      106 |           0
+      107 |           0
+      108 |           0
+      109 |           0
+      110 |           0
+      111 |           0
+      112 |           0
+      113 |           0
+      114 |           0
+      115 |           0
+      116 |           1
+      117 |           0
+      118 |           0
+      119 |           0
+      120 |           0
+      121 |           0
+      122 |           0
+      123 |           0
+      124 |           0
+      125 |           0
+      126 |           0
+      127 |           0
+      128 |           0
+      129 |           0
+      130 |           0
+      131 |           0
+      132 |           0
+-----------------------
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Predictor Balance:
+
+------------------------------------------------------
+                               |   Treated  Synthetic 
+-------------------------------+----------------------
+                         v(15) |  .5243943   .0475046 
+                         v(14) |  .3392681    .017903 
+                         v(13) |  .3388458   .0317087 
+                         v(12) |  .5253746   .0187076 
+                         v(11) |  .5217271   .0199302 
+                         v(10) |  .7343846   .0261278 
+                          v(9) |  .6027642   .0485726 
+                          v(8) |  .8458973   .0249142 
+                          v(7) |  .4914578   .0434934 
+                          v(6) |  .4407191   .1302315 
+                          v(5) |  .4605658   .0238963 
+                          v(4) |  .2918154   .0170865 
+------------------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+file /var/folders/b4/3s0qswvn4hb39bgrmwz7606r0000gp/T//S_38741.00000n saved as .dta format
+
+Duplicates in terms of id
+
+--------------------------------------
+   Copies | Observations       Surplus
+----------+---------------------------
+        1 |          128             0
+--------------------------------------
+
+    Result                      Number of obs
+    -----------------------------------------
+    Not matched                             0
+    Matched                               128  
+    -----------------------------------------
+file 1_Data/Temp//scm_weight_4.dta saved
+   2:      2.12 /        1 =       2.1240
+Treatment Unit 4 out of 4
+   1:      8.28 /        1 =       8.2770
+(33 observations deleted)
+(132 real changes made)
+
+  month_exp |      Freq.     Percent        Cum.
+------------+-----------------------------------
+        -12 |          4        3.03        3.03
+        -11 |          4        3.03        6.06
+        -10 |          4        3.03        9.09
+         -9 |          4        3.03       12.12
+         -8 |          4        3.03       15.15
+         -7 |          4        3.03       18.18
+         -6 |          4        3.03       21.21
+         -5 |          4        3.03       24.24
+         -4 |          4        3.03       27.27
+         -3 |          4        3.03       30.30
+         -2 |          4        3.03       33.33
+         -1 |          4        3.03       36.36
+          0 |          4        3.03       39.39
+          1 |          4        3.03       42.42
+          2 |          4        3.03       45.45
+          3 |          4        3.03       48.48
+          4 |          4        3.03       51.52
+          5 |          4        3.03       54.55
+          6 |          4        3.03       57.58
+          7 |          4        3.03       60.61
+          8 |          4        3.03       63.64
+          9 |          4        3.03       66.67
+         10 |          4        3.03       69.70
+         11 |          4        3.03       72.73
+         12 |          4        3.03       75.76
+         13 |          4        3.03       78.79
+         14 |          4        3.03       81.82
+         15 |          4        3.03       84.85
+         16 |          4        3.03       87.88
+         17 |          4        3.03       90.91
+         18 |          4        3.03       93.94
+         19 |          4        3.03       96.97
+         20 |          4        3.03      100.00
+------------+-----------------------------------
+      Total |        132      100.00
+file 2_Output/asset_classes/synth_treated_temp.dta saved
+v_pre_mn:  (2,772 real changes made)
+v_pre_sd:  (2,772 real changes made)
+(33,120 real changes made)
+
+  month_exp |      Freq.     Percent        Cum.
+------------+-----------------------------------
+        -15 |        920        2.78        2.78
+        -14 |        920        2.78        5.56
+        -13 |        920        2.78        8.33
+        -12 |        920        2.78       11.11
+        -11 |        920        2.78       13.89
+        -10 |        920        2.78       16.67
+         -9 |        920        2.78       19.44
+         -8 |        920        2.78       22.22
+         -7 |        920        2.78       25.00
+         -6 |        920        2.78       27.78
+         -5 |        920        2.78       30.56
+         -4 |        920        2.78       33.33
+         -3 |        920        2.78       36.11
+         -2 |        920        2.78       38.89
+         -1 |        920        2.78       41.67
+          0 |        920        2.78       44.44
+          1 |        920        2.78       47.22
+          2 |        920        2.78       50.00
+          3 |        920        2.78       52.78
+          4 |        920        2.78       55.56
+          5 |        920        2.78       58.33
+          6 |        920        2.78       61.11
+          7 |        920        2.78       63.89
+          8 |        920        2.78       66.67
+          9 |        920        2.78       69.44
+         10 |        920        2.78       72.22
+         11 |        920        2.78       75.00
+         12 |        920        2.78       77.78
+         13 |        920        2.78       80.56
+         14 |        920        2.78       83.33
+         15 |        920        2.78       86.11
+         16 |        920        2.78       88.89
+         17 |        920        2.78       91.67
+         18 |        920        2.78       94.44
+         19 |        920        2.78       97.22
+         20 |        920        2.78      100.00
+------------+-----------------------------------
+      Total |     33,120      100.00
+(file /var/folders/b4/3s0qswvn4hb39bgrmwz7606r0000gp/T//S_38741.00000a not found)
+file /var/folders/b4/3s0qswvn4hb39bgrmwz7606r0000gp/T//S_38741.00000a saved as .dta format
+
+             |         A         AA        AAA        BBB 
+-------------+-------------------------------------------
+         ate |         .          .          .          . 
+          se |         .          .          .          . 
+      ci_min |         .          .          .          . 
+      ci_max |         .          .          .          . 
+       pval2 |         .          .          .          . 
+       pval1 |         .          .          .          . 
+     vol_pre |         .          .          .          . 
+   vol_treat |         .          .          .          . 
+  excess_vol |         .          .          .          . 
+ate_excess~l |         .          .          .          . 
+       rmspe |         .          .          .          . 
+          id |         .          .          .          . 
+(68 missing values generated)
+(14,000 missing values generated)
+(68 missing values generated)
+(14,000 missing values generated)
+(68 missing values generated)
+(14,000 missing values generated)
+(68 missing values generated)
+(14,000 missing values generated)
+
+. 
+end of do-file
+
+. do "/var/folders/b4/3s0qswvn4hb39bgrmwz7606r0000gp/T//SD38741.000000"
+
+. *-------------------------------------------------------------------------------
+. /// 2. Only Stock Market Index
+> *-------------------------------------------------------------------------------
+. qui use "${cln}/synth_clean_fixedcr.dta", clear 
+
+. qui drop if month_exp <= 3
+
+. qui keep if depvar == "Nominal Yield Baseline" | depvar == "Donors"
+
+. tab asset_class
+
+       asset_class |      Freq.     Percent        Cum.
+-------------------+-----------------------------------
+         Commodity |        759       10.85       10.85
+   Municipal Bonds |      4,224       60.38       71.23
+           Outcome |        132        1.89       73.11
+    Sovereign Bond |        825       11.79       84.91
+Stock Market Index |      1,056       15.09      100.00
+-------------------+-----------------------------------
+             Total |      6,996      100.00
+
+. 
+. *-----------------------------------------------
+. keep if asset_class == "Outcome" | asset_class == "Stock Market Index"
+(5,808 observations deleted)
+
+. *------------------------------------------------
+. 
+. * Estimation 
+. qui synth_leave_one
+
+. 
+. /// Save results 
+> preserve 
+
+. qui ate_table 
+
+. list
+
+     +----------------------------------------------------------------------------------------------------------------+
+     |                            Results                AAA                 AA                  A                BBB |
+     |----------------------------------------------------------------------------------------------------------------|
+  1. |       Average Treatment Effect (a)          -0.1080**          -0.0976**          -0.0746**             0.0015 |
+  2. |                                 SE           (0.0633)           (0.0731)           (0.0679)           (0.1060) |
+  3. |                      Conf Interval   (-0.1174,0.0820)   (-0.1356,0.0947)   (-0.1261,0.0880)   (-0.1966,0.1373) |
+  4. |            Historic Volatility (b)             0.2014             0.1539             0.1944             0.5084 |
+  5. |          Volatility March 2020 (c)             0.4661             0.4263             0.4591             0.5244 |
+     |----------------------------------------------------------------------------------------------------------------|
+  6. |      Excess Volatility (d = c - b)             0.2647             0.2724             0.2647             0.0160 |
+  7. | ATE, % Excess Volatility (e = d/a)          40.7792\%          35.8352\%          28.1798\%           9.1714\% |
+  8. |                P-Value (Left Tail)             0.0290             0.0400             0.0460             0.5710 |
+  9. |                P-Value (Two Tails)             0.9600             0.9370             0.9260             0.0630 |
+ 10. |                              RMSPE             0.6850             0.7547             0.6850             0.4209 |
+     +----------------------------------------------------------------------------------------------------------------+
+
+. qui save "${oup}/ate_table_donors_stocks.dta", replace 
+
+. restore 
+
+. 
+. /// Save treatment effects  
+> qui use "${oup}/synth_treated_temp.dta", clear 
+
+. qui save "${oup}/synth_treated_donors_stocks.dta", replace 
+
+. 
+. /// Save weights 
+> qui use "${oup}/weights_results_temp.dta", clear 
+
+. qui save "${oup}/weights_donors_stocks.dta", replace 
+
+. 
+end of do-file
+
+. do "/var/folders/b4/3s0qswvn4hb39bgrmwz7606r0000gp/T//SD38741.000000"
+
+. 
+. *-------------------------------------------------------------------------------
+. /// 3. Only Sovereign bonds
+> *-------------------------------------------------------------------------------
+. qui use "${cln}/synth_clean_fixedcr.dta", clear 
+
+. qui drop if month_exp <= 3
+
+. qui keep if depvar == "Nominal Yield Baseline" | depvar == "Donors"
+
+. tab asset_class
+
+       asset_class |      Freq.     Percent        Cum.
+-------------------+-----------------------------------
+         Commodity |        759       10.85       10.85
+   Municipal Bonds |      4,224       60.38       71.23
+           Outcome |        132        1.89       73.11
+    Sovereign Bond |        825       11.79       84.91
+Stock Market Index |      1,056       15.09      100.00
+-------------------+-----------------------------------
+             Total |      6,996      100.00
+
+. 
+. *-----------------------------------------------
+. keep if asset_class == "Outcome" | asset_class == "Sovereign Bond"
+(6,039 observations deleted)
+
+. *------------------------------------------------
+. 
+. * Estimation 
+. qui synth_leave_one
+variable id does not uniquely identify observations in the master data
+r(459);
+
+end of do-file
+
+r(459);
+
+. do "/var/folders/b4/3s0qswvn4hb39bgrmwz7606r0000gp/T//SD38741.000000"
+
+. 
+. *-------------------------------------------------------------------------------
+. /// 4. Only Commodities
+> *-------------------------------------------------------------------------------
+. qui use "${cln}/synth_clean_fixedcr.dta", clear 
+
+. qui drop if month_exp <= 3
+
+. qui keep if depvar == "Nominal Yield Baseline" | depvar == "Donors"
+
+. tab asset_class
+
+       asset_class |      Freq.     Percent        Cum.
+-------------------+-----------------------------------
+         Commodity |        759       10.85       10.85
+   Municipal Bonds |      4,224       60.38       71.23
+           Outcome |        132        1.89       73.11
+    Sovereign Bond |        825       11.79       84.91
+Stock Market Index |      1,056       15.09      100.00
+-------------------+-----------------------------------
+             Total |      6,996      100.00
+
+. 
+. *-----------------------------------------------
+. keep if asset_class == "Outcome" | asset_class == "Commodity"
+(6,105 observations deleted)
+
+. *------------------------------------------------
+. 
+. * Estimation 
+. qui synth_leave_one
+variable id does not uniquely identify observations in the master data
+r(459);
+
+end of do-file
+
+r(459);
+
+. log close
+      name:  <unnamed>
+       log:  /Users/lunavarr/Library/CloudStorage/OneDrive-UW/Research/MLF_Volatility/2_Output/asset_classes/asset_classes.log
+  log type:  text
+ closed on:   5 Dec 2025, 02:58:07
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------

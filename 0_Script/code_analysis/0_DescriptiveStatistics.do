@@ -10,6 +10,8 @@
 
 //// Run the Synth
 use "${cln}/synth_clean_fixedcr.dta", clear 
+keep if depvar == "Nominal Yield Baseline" | depvar == "Donors"
+drop if asset_class == "Municipal Bond"
 drop if month_exp <= 3
 
 /// Mean of the Volatility in the Pre-treatment Period. That is, in the months from Septmeber to February 
@@ -33,8 +35,11 @@ qui replace post = 1 if month_exp >= ${treat_period}
 drop if month_exp >= ${treat_period} + ${tr_eff_window}
 ///
 gen datatype = 0 
-replace datatype = 1 if data == "SP Munis"
-replace datatype = 2 if data == "Donor Prices"
+replace datatype = 1 if asset_class == "Commodity"
+replace datatype = 2 if asset_class == "Currency"
+replace datatype = 3 if asset_class == "Sovereign Bond"
+replace datatype = 4 if asset_class == "Stock Market Index"
+
 ********************************************************************************
 /// First the Outcomes Only 
 qui tab id if data == "Outcome"
@@ -84,18 +89,19 @@ esttab mat(R, fmt(4 4 4 4 4))
 /// First the Outcomes Only 
 
 
-local donors1 = "SP Munis"
-local donors2 = "Donor Prices"
-
+local donors1 = "Commodity"
+local donors2 = "Currency"
+local donors3 = "Sovereign Bond"
+local donors4 = "Stock Market Index"
 
 
 /// Define Matrix To Store Values 
-matrix define   D=J(4,8,.)
-matrix rownames D = "SPMunis" "SPMunis_se" "Stocks" "Stocks_se" 
+matrix define   D=J(8,8,.)
+matrix rownames D = "Comm" "Comm_se" "Curr" "Curr_se" "SB" "SB_se" "Stock" "Stock_se" 
 matrix colnames D = "Yield_Pre" "Yield_Post" "Yield_Diff" "Yield_Pval" "Vol_Pre" "Vol_Post" "Vol_Diff" "Vol_Pval"
 /// Estimate the Mean Difference 
 local j = 1 
-forvalues i = 1(1)2{
+forvalues i = 1(1)4{
 /// First the Yield 
 ttest yield if datatype ==  `i' , by(post) unequal
 /// Store the Results 
@@ -157,11 +163,14 @@ qui replace variable = "AAA"		if id == 5
 qui replace variable = "AAA_se"		if id == 6
 qui replace variable = "BBB"		if id == 7
 qui replace variable = "BBB_se"		if id == 8
-qui replace variable = "Donors (Munis)"	if id == 9
-qui replace variable = "SPMunis_se"	if id == 10
-qui replace variable = "Donors (Others)"		if id == 11
-qui replace variable = "Stocks_se" 	if id == 12
-
+qui replace variable = "Commodities"	if id == 9
+qui replace variable = "Commodities_se"	if id == 10
+qui replace variable = "Currencies"		if id == 11
+qui replace variable = "Currencies_se" 	if id == 12
+qui replace variable = "Sovereign Bonds"		if id == 13
+qui replace variable = "Sovereign Bonds_se" 	if id == 14
+qui replace variable = "International Stock Market Indices"		if id == 15
+qui replace variable = "Stocks_se" 	if id == 16
 /// Change the Order of the Table 
 qui replace id = 1 if variable == "AAA"		
 qui replace id = 2 if variable == "AAA_se"	
@@ -171,10 +180,15 @@ qui replace id = 5 if variable == "A"
 qui replace id = 6 if variable == "A_se"		
 qui replace id = 7 if variable == "BBB"		
 qui replace id = 8 if variable == "BBB_se"	
-qui replace id = 9 if variable == "Donors (Munis)"	
-qui replace id = 10 if variable == "SPMunis_se"
-qui replace id = 11 if variable == "Donors (Others)"	
-qui replace id = 12 if variable == "Stocks_se" 
+qui replace id = 9 if variable == "Sovereign Bonds"	
+qui replace id = 10 if variable == "Sovereign Bonds_se"
+qui replace id = 11 if variable == "Commodities"	
+qui replace id = 12 if variable == "Commodities_se" 
+qui replace id = 13 if variable == "Currencies"
+qui replace id = 14 if variable == "Currencies_se"	
+qui replace id = 15 if variable == "International Stock Market Indices" 
+qui replace id = 16 if variable == "Stocks_se" 
+
 sort id 
 order variable 
 

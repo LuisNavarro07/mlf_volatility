@@ -1,0 +1,59 @@
+\documentclass{article}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage[margin=1in]{geometry}
+\begin{document}
+
+\begin{table}[tbp] \centering
+\newcolumntype{R}{>{\raggedleft\arraybackslash}X}
+\newcolumntype{L}{>{\raggedright\arraybackslash}X}
+\newcolumntype{C}{>{\centering\arraybackslash}X}
+
+\label{tab:regtable_state_leave_one_out_crf}
+\begin{tabularx}{\linewidth}{l c c c c c}
+
+\toprule
+{StateCode}&{AAA_bm}&{AAA_am}&{AA_bm}&{AA_am}&{A_am} \tabularnewline
+\midrule \addlinespace[\belowrulesep]
+Baseline&--0.0808**&--0.0824**&--0.0232&--0.0018&--0.0927** \tabularnewline
+\midrule FL&0.0321&&&& \tabularnewline
+GA&0.0321&&&& \tabularnewline
+MD&0.0321&&&& \tabularnewline
+TN&0.0321&&&& \tabularnewline
+UT&0.0321&&&& \tabularnewline
+VA&0.0321&&&& \tabularnewline
+\midrule DE&&--0.1020**&&& \tabularnewline
+ID&&--0.0927**&&& \tabularnewline
+\midrule CA&&&--0.0268&& \tabularnewline
+CO&&&--0.0228&& \tabularnewline
+IN&&&--0.0249&& \tabularnewline
+MN&&&--0.0223&& \tabularnewline
+NC&&&--0.0223&& \tabularnewline
+NV&&&--0.0226&& \tabularnewline
+OH&&&--0.0131&& \tabularnewline
+OR&&&--0.0239&& \tabularnewline
+SC&&&--0.0236&& \tabularnewline
+TX&&&--0.0187&& \tabularnewline
+WA&&&--0.0162&& \tabularnewline
+WI&&&--0.0250&& \tabularnewline
+\midrule AR&&&&--0.0060& \tabularnewline
+DC&&&&--0.0204& \tabularnewline
+HI&&&&--0.0114& \tabularnewline
+IA&&&&--0.0067& \tabularnewline
+LA&&&&--0.0078& \tabularnewline
+MA&&&&0.0342& \tabularnewline
+ME&&&&--0.0092& \tabularnewline
+NE&&&&--0.0065& \tabularnewline
+NM&&&&--0.0045& \tabularnewline
+NY&&&&--0.0290& \tabularnewline
+RI&&&&--0.0029& \tabularnewline
+VT&&&&--0.0034& \tabularnewline
+WV&&&&--0.0028& \tabularnewline
+\midrule CT&&&&&--0.0824** \tabularnewline
+MS&&&&&--0.0923** \tabularnewline
+\midrule 
+\bottomrule 
+
+\end{tabularx}
+\end{table}
+\end{document}

@@ -1,0 +1,34 @@
+\documentclass{article}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage[margin=1in]{geometry}
+\usepackage{siunitx}
+\begin{document}
+
+\begin{table}[tbp] \centering
+\newcolumntype{R}{>{\raggedleft\arraybackslash}X}
+\newcolumntype{L}{>{\raggedright\arraybackslash}X}
+\newcolumntype{C}{>{\centering\arraybackslash}X}
+
+\begin{tabularx}{\linewidth}{@{}lSSSSSS@{}}
+
+\toprule
+{variable}&{y_pre}&{y_post}&{y_diff}&{v_pre}&{v_post}&{v_diff} \tabularnewline
+\midrule \addlinespace[\belowrulesep]
+{AAA}&0.1273&0.3400&0.2126&0.1906&0.1091&-0.0815 \tabularnewline
+{}&{(0.4785)}&{(0.4773)}&{(0.1851)}&{(0.0951)}&{(0.0615)}&{(0.0317)} \tabularnewline
+{AA}&0.1521&0.4599&0.3078&0.1593&0.0919&-0.0673 \tabularnewline
+{}&{(0.4199)}&{(0.4711)}&{(0.1717)}&{(0.1092)}&{(0.0589)}&{(0.0350)} \tabularnewline
+{A}&0.4875&0.8641&0.3766&0.1983&0.1207&-0.0776 \tabularnewline
+{}&{(0.4547)}&{(0.6174)}&{(0.2065)}&{(0.0883)}&{(0.0559)}&{(0.0293)} \tabularnewline
+{BBB}&1.6235&2.1677&0.5441&0.4945&0.5380&0.0435 \tabularnewline
+{}&{(0.4417)}&{(0.9742)}&{(0.2820)}&{(0.1534)}&{(0.2141)}&{(0.0708)} \tabularnewline
+{Donors (Munis)}&1.7816&1.8027&0.0210&0.0222&0.0197&{-0.0024***} \tabularnewline
+{}&{(0.6401)}&{(0.5735)}&{(0.0209)}&{(0.0151)}&{(0.0100)}&{(0.0004)} \tabularnewline
+{Donors (Others)}&4730.7368&4848.5468&117.8096&49.4819&48.1674&-1.3145 \tabularnewline
+{}&{(10058.8466)}&{(10400.0214)}&{(442.1877)}&{(139.6128)}&{(110.1571)}&{(5.5150)} \tabularnewline
+\bottomrule 
+
+\end{tabularx}
+\end{table}
+\end{document}

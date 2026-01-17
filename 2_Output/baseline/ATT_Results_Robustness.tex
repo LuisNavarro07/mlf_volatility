@@ -1,0 +1,65 @@
+\documentclass{article}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage[margin=1in]{geometry}
+\usepackage{siunitx}
+\begin{document}
+
+\begin{table}[h] \centering
+\newcolumntype{R}{>{\raggedleft\arraybackslash}X}
+\newcolumntype{L}{>{\raggedright\arraybackslash}X}
+\newcolumntype{C}{>{\centering\arraybackslash}X}
+
+\begin{tabularx}{\linewidth}{lccccccccc}
+
+\toprule
+{Results}&{AAA}&{AA}&{A}&{BBB} \tabularnewline
+\midrule \addlinespace[\belowrulesep]
+{Panel A: Alternative Volatility Measurements}&{}&{}&{}&{} \tabularnewline
+{Baseline}&{-0.2118***}&{-0.0957*}&{-0.1147**}&{-0.1602*} \tabularnewline
+{}&{(0.1168)}&{(0.1189)}&{(0.1144)}&{(0.0815)} \tabularnewline
+{ATT, % Excess Volatility}&{80.0200\%}&{35.1416\%}&{43.3256\%}&{NA} \tabularnewline
+{RMSPE}&0.0434&0.0477&0.0353&0.1398 \tabularnewline
+{Weighted-by-Volume Volatility}&{-0.1457**}&-0.0539&-0.0948&{-0.5458**} \tabularnewline
+{}&{(0.1428)}&{(0.1204)}&{(0.1385)}&{(0.1064)} \tabularnewline
+{ATT, % Excess Volatility}&{56.3648\%}&{25.3078\%}&{38.3017\%}&{NA} \tabularnewline
+{RMSPE}&0.0634&0.0595&0.0551&0.2368 \tabularnewline
+{Bond Spreads Volatility}&{-0.1928***}&-0.0758&{-0.1431**}&{-0.1695*} \tabularnewline
+{}&{(0.1174)}&{(0.1347)}&{(0.1129)}&{(0.1442)} \tabularnewline
+{ATT, % Excess Volatility}&{67.7980\%}&{24.0119\%}&{52.9142\%}&{NA} \tabularnewline
+{RMSPE}&0.0377&0.0494&0.0297&0.1301 \tabularnewline
+{Residualized Yield Volatility}&{-0.1695**}&-0.0816&{-0.1245**}&0.0367 \tabularnewline
+{}&{(0.1237)}&{(0.1173)}&{(0.1130)}&{(0.1299)} \tabularnewline
+{ATT, % Excess Volatility}&{73.7233\%}&{30.9927\%}&{48.9822\%}&{26.8244\%} \tabularnewline
+{RMSPE}&0.0423&0.0522&0.0381&0.1112 \tabularnewline
+{Weighted Residualized Spread Volatility}&{-0.1634**}&-0.0821&{-0.1614**}&{-0.5940**} \tabularnewline
+{}&{(0.1396)}&{(0.1214)}&{(0.1451)}&{(0.1018)} \tabularnewline
+{ATT, % Excess Volatility}&{51.5071\%}&{36.2107\%}&{52.4574\%}&{NA} \tabularnewline
+{RMSPE}&0.0471&0.0572&0.0468&0.2434 \tabularnewline
+{Panel B: Fixed Credit Rating Profile}&{}&{}&{}&{} \tabularnewline
+{ATT}&{-0.1488**}&-0.0684&{-0.1657**}&-0.0409 \tabularnewline
+{}&{(0.1149)}&{(0.1157)}&{(0.1002)}&{(0.1170)} \tabularnewline
+{ATT, % Excess Volatility}&{57.8954\%}&{23.4820\%}&{90.6153\%}&{45.7348\%} \tabularnewline
+{RMSPE}&0.0427&0.0329&0.0312&0.0713 \tabularnewline
+{Panel C: Composition of the Donor Pool}&{}&{}&{}&{} \tabularnewline
+{Donors: International Sovereign Bonds}&{-0.1657**}&{-0.1163**}&-0.0643&0.0433 \tabularnewline
+{}&{(0.1168)}&{(0.1189)}&{(0.1144)}&{(0.0815)} \tabularnewline
+{ATT, % Excess Volatility}&{62.5959\%}&{42.6758\%}&{24.2991\%}&{271.5839\%} \tabularnewline
+{RMSPE}&0.0489&0.0504&0.0430&0.1730 \tabularnewline
+{Donors: Commodities}&{-0.2286***}&{-0.1129*}&{-0.1164**}&{-0.3083***} \tabularnewline
+{}&{(0.1168)}&{(0.1189)}&{(0.1144)}&{(0.0815)} \tabularnewline
+{ATT, % Excess Volatility}&{86.3580\%}&{41.4422\%}&{43.9936\%}&{NA} \tabularnewline
+{RMSPE}&0.0488&0.0631&0.0379&0.1766 \tabularnewline
+{Donors: International Stock Indices}&{-0.0973*}&-0.0761&-0.0518&0.0076 \tabularnewline
+{}&{(0.1168)}&{(0.1189)}&{(0.1144)}&{(0.0815)} \tabularnewline
+{ATT, % Excess Volatility}&{36.7652\%}&{27.9213\%}&{19.5733\%}&{47.8576\%} \tabularnewline
+{RMSPE}&0.0636&0.0640&0.0482&0.1842 \tabularnewline
+{Donors: Currencies}&{-0.0968*}&{-0.1060*}&{-0.1110**}&0.0078 \tabularnewline
+{}&{(0.1168)}&{(0.1189)}&{(0.1144)}&{(0.0815)} \tabularnewline
+{ATT, % Excess Volatility}&{36.5650\%}&{38.8993\%}&{41.9340\%}&{48.9010\%} \tabularnewline
+{RMSPE}&0.0586&0.0582&0.0451&0.1743 \tabularnewline
+\bottomrule 
+
+\end{tabularx}
+\end{table}
+\end{document}

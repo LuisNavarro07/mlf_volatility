@@ -1,0 +1,32 @@
+\documentclass{article}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage[margin=1in]{geometry}
+\begin{document}
+
+\begin{table}[tbp] \centering
+\newcolumntype{R}{>{\raggedleft\arraybackslash}X}
+\newcolumntype{L}{>{\raggedright\arraybackslash}X}
+\newcolumntype{C}{>{\centering\arraybackslash}X}
+
+\label{tab:synth_did_results_table}
+\begin{tabularx}{\linewidth}{l c c c c}
+
+\toprule
+{Results}&{AAA}&{AA}&{A}&{BBB} \tabularnewline
+\midrule \addlinespace[\belowrulesep]
+ATT (a)&--0.0977&--0.0762&--0.0523&0.0075 \tabularnewline
+SE&(0.0748)&(0.0761)&(0.0707)&(0.1273) \tabularnewline
+Conf Interval&(--0.1428,0.2009)&(--0.1453,0.2045)&(--0.1349,0.1898)&(--0.2431,0.3420) \tabularnewline
+Historic Volatility (b)&0.2014&0.1539&0.1944&0.5084 \tabularnewline
+Volatility March 2020 (c)&0.4661&0.4263&0.4591&0.5244 \tabularnewline
+\midrule Excess Volatility (d = c - b)&0.2647&0.2724&0.2647&0.0160 \tabularnewline
+ATT, % Excess Volatility (e = d/a)&36.9052\%&27.9885\%&19.7751\%&46.8235\% \tabularnewline
+P-Value (Left Tail)&0.1096&0.1781&0.2740&0.7945 \tabularnewline
+P-Value (Two Tails)&0.1507&0.2329&0.3425&0.9178 \tabularnewline
+RMSPE&0.0636&0.0639&0.0480&0.1841 \tabularnewline
+\bottomrule 
+
+\end{tabularx}
+\end{table}
+\end{document}

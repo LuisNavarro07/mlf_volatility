@@ -15,6 +15,7 @@ replace STATEFP = "0" + STATEFP if length(STATEFP) == 1
 tempfile ratingsmap
 save `ratingsmap', replace 
 
+
 ** Read GDp data 
 import delimited "${raw}/stateusgdp.csv", clear varnames(1)
 rename geoname state
@@ -168,7 +169,40 @@ replace rating_segment = "NR" if rating == "NR"
 
 encode fed_cat, gen(fed_cat_g)
 encode crf_rule, gen(crf_rule_g)
-encode rating_segment, gen(rating_segment_g)
+/// Rating by Segment 
+* Generate the segment variable manually to control the Legend Order (1 to 9)
+capture drop rating_segment_g
+gen rating_segment_g = .
+
+* 1 & 2: AAA (Green)
+replace rating_segment_g = 1 if rating == "AAA" & fed_cat == "Below Median"
+replace rating_segment_g = 2 if rating == "AAA" & fed_cat == "Above Median"
+
+* 3 & 4: AA (Blue)
+replace rating_segment_g = 3 if rating == "AA" & fed_cat == "Below Median"
+replace rating_segment_g = 4 if rating == "AA" & fed_cat == "Above Median"
+
+* 5 & 6: A (Red)
+replace rating_segment_g = 5 if rating == "A" & fed_cat == "Below Median"
+replace rating_segment_g = 6 if rating == "A" & fed_cat == "Above Median"
+
+* 7 & 8: BBB (Orange - chosen as distinct color)
+replace rating_segment_g = 7 if rating == "BBB" & fed_cat == "Below Median"
+replace rating_segment_g = 8 if rating == "BBB" & fed_cat == "Above Median"
+
+* 9: NR
+replace rating_segment_g = 9 if rating == "NR"
+
+* Define Labels for the Legend
+label define lbl_seg 1 "AAA (Below Median)" 2 "AAA (Above Median)" ///
+                     3 "AA (Below Median)" 4 "AA (Above Median)" ///
+                     5 "A (Below Median)" 6 "A (Above Median)" ///
+                     7 "BBB (Below Median)" 8 "BBB (Above Median)" ///
+                     9 "NR"
+label values rating_segment_g lbl_seg
+
+
+
 
 /// Plot the map: Above Below Median Rule 
 spmap crf_rule_g  using "${raw}/Map/xy_coor.dta", id(_ID)  name(map_crf, replace) clm(unique) ///
@@ -195,13 +229,16 @@ graph display maps_comb, ysize(100) xsize(70) scale(.9)
 graph export "${oup}/Map_Combined_Allocations.pdf", replace
 
 
-/// Plot the map: Ratings by 
 
-spmap rating_segment_g  using "${raw}/Map/xy_coor.dta", id(_ID)  name(map_segments, replace) clm(unique) ///
-	ocolor(black black black black black black black black black black) /// 
-	fcolor(magenta%10 magenta%70 green%20 green%70  ebblue%20 ebblue%70 cranberry%20 cranberry%70) ///
-	label(data("${raw}/Map/St_lab_NoPR.dta") xcoord(x_lab) ycoord(y_lab) label(stlab) ///
-	by(lgroup) size(*.5) pos(0 6)) leg(pos(11) rows(3) ring(1)) title("Credit Rating Categories by Distribution of Grant Funding per Capita", pos(11) size(small))
+/// Plot the map: Ratings by Segment with Custom Colors
+/// Plot the map: Ratings by Segment with Solid Tones
+spmap rating_segment_g using "${raw}/Map/xy_coor.dta", id(_ID) name(map_segments, replace) clm(unique) ///
+    ocolor(black black black black black black black black black) ///
+    fcolor(lime forest_green ltblue navy pink maroon gold orange gs10) ///
+    label(data("${raw}/Map/St_lab_NoPR.dta") xcoord(x_lab) ycoord(y_lab) label(stlab) ///
+    by(lgroup) size(*.5) pos(0 6)) ///
+    leg(pos(11) rows(5) ring(1) size(small)) ///
+    title("Credit Rating Categories by Distribution of Grant Funding per Capita", pos(11) size(small))
 	
 graph display map_segments, ysize(100) xsize(90) scale(.9)
 graph export "${oup}/Map_FedGrant_Segments.pdf", replace

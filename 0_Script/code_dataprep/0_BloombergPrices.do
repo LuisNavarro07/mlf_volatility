@@ -80,6 +80,8 @@ reshape long var, i(date) j(sec_id)
 drop yr 
 merge m:1 sec_id using `varnames', keep(match master) nogen 
 rename var volatility 
+* Drop SP500
+drop if name == "spxindex"
 ********************************************************************************
 /// Add Yield as an outcome. This is to do the graphs 
 clonevar yield = volatility

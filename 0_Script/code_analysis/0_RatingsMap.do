@@ -24,6 +24,6 @@ spmap rating_agg  using "${raw}/Map/xy_coor.dta", id(_ID)  name(map_ratings, rep
 	label(data("${raw}/Map/St_lab_NoPR.dta") xcoord(x_lab) ycoord(y_lab) label(stlab) ///
 	by(lgroup) size(*.5) pos(0 6)) leg(pos(12) rows(1)) 
 graph display map_ratings, ysize(60) xsize(100) scale(.9)
-graph export "${oup}/map_credit_ratings_groups.pdf", replace
+graph export "2_Output/baseline/map_credit_ratings_groups.pdf", replace
 
 exit 

@@ -1,0 +1,26 @@
+\documentclass{article}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage[margin=1in]{geometry}
+\usepackage{siunitx}
+\begin{document}
+
+\begin{table}[h] \centering
+\newcolumntype{R}{>{\raggedleft\arraybackslash}X}
+\newcolumntype{L}{>{\raggedright\arraybackslash}X}
+\newcolumntype{C}{>{\centering\arraybackslash}X}
+
+\begin{tabularx}{\linewidth}{lccccccccc}
+
+\toprule
+{credit_rating}&{RealATT}&{Mean}&{SD}&{P01}&{P05}&{P10}&{P90}&{P95}&{P99} \tabularnewline
+\midrule \addlinespace[\belowrulesep]
+{AAA}&-.0805&-.0804&.0027&-.0826&-.0813&-.081&-.0802&-.0794&-.0751 \tabularnewline
+\midrule {AA}&-.0048&-.0049&.001&-.0086&-.006&-.0054&-.0042&-.0035&-.0007 \tabularnewline
+{A}&-.0508&-.0508&.0018&-.0578&-.0516&-.0512&-.0503&-.0497&-.0476 \tabularnewline
+{BBB}&.0336&.0338&.0078&.0255&.0305&.0322&.035&.036&.0395 \tabularnewline
+\bottomrule 
+
+\end{tabularx}
+\end{table}
+\end{document}

@@ -1,0 +1,61 @@
+\documentclass{article}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage[margin=1in]{geometry}
+\begin{document}
+
+\begin{table}[tbp] \centering
+\newcolumntype{R}{>{\raggedleft\arraybackslash}X}
+\newcolumntype{L}{>{\raggedright\arraybackslash}X}
+\newcolumntype{C}{>{\centering\arraybackslash}X}
+
+\label{tab:regtable_state_leave_one_out}
+\begin{tabularx}{\linewidth}{l c c c c}
+
+\toprule
+{StateCode}&{AAA}&{AA}&{A}&{BBB} \tabularnewline
+\midrule \addlinespace[\belowrulesep]
+Baseline&--0.2118***&--0.0957*&--0.1147**&--0.1602* \tabularnewline
+DE&--0.1716**&&& \tabularnewline
+FL&--0.2011**&&& \tabularnewline
+GA&--0.1445**&&& \tabularnewline
+ID&--0.2120**&&& \tabularnewline
+\midrule MD&--0.2698**&&& \tabularnewline
+TN&--0.2055**&&& \tabularnewline
+UT&--0.2119**&&& \tabularnewline
+VA&--0.2126**&&& \tabularnewline
+AR&&--0.0963*&& \tabularnewline
+CA&&--0.0991*&& \tabularnewline
+CO&&--0.1005*&& \tabularnewline
+DC&&--0.0972*&& \tabularnewline
+HI&&--0.0961*&& \tabularnewline
+IA&&--0.0958*&& \tabularnewline
+IN&&--0.0463&& \tabularnewline
+LA&&--0.0970*&& \tabularnewline
+MA&&--0.0840&& \tabularnewline
+ME&&--0.0963*&& \tabularnewline
+MN&&--0.0927&& \tabularnewline
+NC&&--0.1029*&& \tabularnewline
+NE&&--0.0959*&& \tabularnewline
+NM&&--0.0960*&& \tabularnewline
+NV&&--0.0962*&& \tabularnewline
+NY&&--0.1153**&& \tabularnewline
+OH&&--0.1002*&& \tabularnewline
+OR&&--0.1002*&& \tabularnewline
+RI&&--0.0959*&& \tabularnewline
+SC&&--0.0978*&& \tabularnewline
+TX&&--0.0927&& \tabularnewline
+VT&&--0.0932*&& \tabularnewline
+WA&&--0.0931*&& \tabularnewline
+WI&&--0.1066*&& \tabularnewline
+WV&&--0.0946*&& \tabularnewline
+CT&&&--0.0048& \tabularnewline
+MS&&&--0.1130**& \tabularnewline
+PA&&&--0.2041**& \tabularnewline
+AZ&&&&--0.1249 \tabularnewline
+IL&&&&0.1327 \tabularnewline
+\bottomrule 
+
+\end{tabularx}
+\end{table}
+\end{document}
